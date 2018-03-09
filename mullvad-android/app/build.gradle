@@ -1,0 +1,16 @@
+apply plugin: 'com.android.application'
+apply plugin: 'kotlin-android'
+apply plugin: 'kotlin-android-extensions'
+
+android {
+    compileSdkVersion 27
+    buildToolsVersion '27.0.3'
+
+    defaultConfig {
+        applicationId 'net.mullvad.vpnapp'
+        minSdkVersion 1
+        targetSdkVersion 27
+        versionCode 1
+        versionName '0.1.0'
+    }
+}
