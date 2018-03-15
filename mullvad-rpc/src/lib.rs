@@ -48,12 +48,12 @@ static MASTER_API_URI: &str = "https://api.mullvad.net/rpc/";
 
 /// Create and returns a `HttpHandle` running on the given core handle.
 pub fn shared(handle: &Handle) -> Result<HttpHandle, HttpError> {
-    HttpTransport::shared(handle)?.handle(MASTER_API_URI)
+    HttpTransport::new().shared(handle)?.handle(MASTER_API_URI)
 }
 
 /// Spawns a tokio core on a new thread and returns a `HttpHandle` running on that core.
 pub fn standalone() -> Result<HttpHandle, HttpError> {
-    HttpTransport::new()?.handle(MASTER_API_URI)
+    HttpTransport::new().standalone()?.handle(MASTER_API_URI)
 }
 
 jsonrpc_client!(pub struct AccountsProxy {
@@ -72,7 +72,7 @@ jsonrpc_client!(pub struct ProblemReportProxy {
 
 impl ProblemReportProxy<HttpHandle> {
     pub fn connect() -> Result<Self, HttpError> {
-        let transport = HttpTransport::new()?.handle(MASTER_API_URI)?;
+        let transport = HttpTransport::new().standalone()?.handle(MASTER_API_URI)?;
         Ok(ProblemReportProxy::new(transport))
     }
 }
