@@ -3,8 +3,12 @@ use futures::{future, Future, Stream};
 
 use hyper;
 use hyper::client::Client;
+#[cfg(not(feature = "tls"))]
+use hyper::client::HttpConnector;
 use hyper::{Request, StatusCode, Uri};
+#[cfg(feature = "tls")]
 use hyper_tls::HttpsConnector;
+#[cfg(feature = "tls")]
 use native_tls;
 
 use tokio_core::reactor::Handle;
@@ -19,7 +23,7 @@ error_chain! {
         }
     }
     foreign_links {
-        Tls(native_tls::Error);
+        Tls(native_tls::Error) #[cfg(feature = "tls")];
         Hyper(hyper::Error) #[doc = "An error occured in Hyper."];
         Uri(hyper::error::UriError) #[doc = "The string given was not a valid URI."];
     }
@@ -30,11 +34,21 @@ pub type RequestSender = mpsc::UnboundedSender<(Request, oneshot::Sender<Result<
 type RequestReceiver = mpsc::UnboundedReceiver<(Request, oneshot::Sender<Result<Vec<u8>>>)>;
 
 pub fn create_http_client(handle: &Handle) -> Result<RequestSender> {
-    let connector = HttpsConnector::new(1, handle)?;
+    let connector = create_connector(handle)?;
     let client = Client::configure().connector(connector).build(handle);
     let (request_tx, request_rx) = mpsc::unbounded();
     handle.spawn(create_request_processing_future(request_rx, client));
     Ok(request_tx)
+}
+
+#[cfg(feature = "tls")]
+fn create_connector(handle: &Handle) -> Result<HttpsConnector> {
+    Ok(HttpsConnector::new(1, handle)?)
+}
+
+#[cfg(not(feature = "tls"))]
+fn create_connector(handle: &Handle) -> Result<HttpConnector> {
+    Ok(HttpConnector::new(1, handle))
 }
 
 fn create_request_processing_future<CC: hyper::client::Connect>(

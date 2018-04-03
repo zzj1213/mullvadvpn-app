@@ -11,12 +11,14 @@ extern crate chrono;
 extern crate error_chain;
 extern crate futures;
 extern crate hyper;
+#[cfg(feature = "tls")]
 extern crate hyper_tls;
 #[macro_use]
 extern crate jsonrpc_client_core;
 extern crate jsonrpc_client_http;
 #[macro_use]
 extern crate log;
+#[cfg(feature = "tls")]
 extern crate native_tls;
 extern crate serde_json;
 extern crate tokio_core;

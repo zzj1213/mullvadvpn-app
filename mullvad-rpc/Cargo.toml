@@ -5,6 +5,9 @@ authors = ["Mullvad VPN <admin@mullvad.net>", "Linus Färnstrand <linus@mullvad.
 description = "Mullvad VPN RPC clients. Providing an interface to query our infrastructure for information."
 license = "GPL-3.0"
 
+[features]
+tls = ["hyper-tls", "native-tls"]
+
 [dependencies]
 chrono = { version = "0.4", features = ["serde"] }
 error-chain = "0.11"
@@ -14,8 +17,8 @@ jsonrpc-client-http = "0.3"
 serde_json = "1.0"
 tokio-core = "0.1"
 hyper = "0.11"
-hyper-tls = "0.1"
-native-tls = "0.1"
+hyper-tls = { version = "0.1", optional = true }
+native-tls = { version = "0.1", optional = true }
 log = "0.4"
 
 mullvad-types = { path = "../mullvad-types" }
