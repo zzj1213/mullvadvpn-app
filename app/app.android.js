@@ -3,7 +3,7 @@
 import React from 'react';
 import RX, { Component } from 'reactxp';
 import { Provider } from 'react-redux';
-import { Router } from 'react-router-redux';
+import { Router } from 'react-router-native';
 import { createMemoryHistory } from 'history';
 import makeRoutes from './routes';
 import configureStore from './redux/store';
@@ -40,10 +40,10 @@ DeviceEventEmitter.addListener('com.mullvad.backend-info', async (_event, args) 
   }
 });
 
-MobileAppBridge.startBackend().then(_response => {}).catch(e => {
+/*MobileAppBridge.startBackend().then(_response => {}).catch(e => {
   log.error('Failed starting backend:', e);
 });
-
+*/
 const _isPortrait = () => {
   const dim = RX.UserInterface.measureWindow();
   return dim.height >= dim.width;

@@ -93,6 +93,7 @@ export default function makeRoutes(getState: ReduxGetState, componentProps: Shar
       return (
         <PlatformWindow>
           <TransitionContainer { ...transitionProps }>
+
             <Switch key={ location.key } location={ location }>
               <LoginRoute exact path="/" component={ LoginPage } />
               <PrivateRoute exact path="/connect" component={ ConnectPage } />
