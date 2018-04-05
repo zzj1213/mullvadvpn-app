@@ -15,10 +15,17 @@ error_chain! {
     }
 }
 
-#[cfg(unix)]
+#[cfg(all(unix, not(target_os = "android")))]
 lazy_static! {
     /// The path to the file where we write the RPC connection info
     static ref RPC_ADDRESS_FILE_PATH: PathBuf = Path::new("/tmp").join(".mullvad_rpc_address");
+}
+
+#[cfg(target_os = "android")]
+lazy_static! {
+    /// The path to the file where we write the RPC connection info
+    static ref RPC_ADDRESS_FILE_PATH: PathBuf =
+        Path::new("/data/data/net.mullvad.vpnapp/files").join(".mullvad_rpc_address");
 }
 
 #[cfg(not(unix))]
