@@ -1,7 +1,5 @@
 extern crate serde_json;
 
-use app_dirs;
-
 use mullvad_types::relay_constraints::{Constraint, LocationConstraint, RelayConstraints,
                                        RelaySettings, RelaySettingsUpdate};
 use talpid_types::net::TunnelOptions;
@@ -12,6 +10,7 @@ use std::path::PathBuf;
 
 error_chain! {
     errors {
+        #[cfg(not(target_os = "android"))]
         DirectoryError {
             description("Unable to create settings directory for program")
         }
@@ -87,10 +86,21 @@ impl Settings {
         serde_json::to_writer_pretty(file, self).chain_err(|| ErrorKind::WriteError(path))
     }
 
+    #[cfg(not(target_os = "android"))]
     fn get_settings_path() -> Result<PathBuf> {
+        use app_dirs;
+
         let dir = app_dirs::app_root(app_dirs::AppDataType::UserConfig, &::APP_INFO)
             .chain_err(|| ErrorKind::DirectoryError)?;
+
         Ok(dir.join(SETTINGS_FILE))
+    }
+
+    #[cfg(target_os = "android")]
+    fn get_settings_path() -> Result<PathBuf> {
+        use std::path::Path;
+
+        Ok(Path::new("/data/data/net.mullvad.vpnapp/files").join(SETTINGS_FILE))
     }
 
     fn read_settings(file: &mut File) -> Result<Settings> {
