@@ -56,3 +56,8 @@ pub use self::linux::{Error, ErrorKind, Netfilter as FirewallProxy, Result};
 mod windows;
 #[cfg(windows)]
 pub use self::windows::{Error, ErrorKind, Result, WindowsFirewall as FirewallProxy};
+
+#[cfg(target_os = "android")]
+mod android;
+#[cfg(target_os = "android")]
+pub use self::android::{AndroidFirewall as FirewallProxy, Error, ErrorKind, Result};
