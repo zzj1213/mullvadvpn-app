@@ -40,10 +40,10 @@ DeviceEventEmitter.addListener('com.mullvad.backend-info', async (_event, args) 
   }
 });
 
-/*MobileAppBridge.startBackend().then(_response => {}).catch(e => {
+MobileAppBridge.startBackend().then(_response => {}).catch(e => {
   log.error('Failed starting backend:', e);
 });
-*/
+
 const _isPortrait = () => {
   const dim = RX.UserInterface.measureWindow();
   return dim.height >= dim.width;

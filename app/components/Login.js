@@ -104,8 +104,8 @@ export default class Login extends Component<LoginPropTypes, State> {
     // restore focus if click happened within dropdown
     //if(relatedTarget) {
       //e.target.focus();
-      return;
-    }
+     // return;
+    //}
 
     this.setState({ isActive: false }, () => {
       this._animate(this.props);
