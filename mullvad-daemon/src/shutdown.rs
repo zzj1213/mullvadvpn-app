@@ -1,6 +1,6 @@
 error_chain!{}
 
-#[cfg(unix)]
+#[cfg(all(unix, not(target_os = "android")))]
 mod platform {
     extern crate simple_signal;
 
@@ -33,6 +33,19 @@ mod platform {
             debug!("Process received Ctrl-c");
             f();
         }).chain_err(|| "Unable to attach ctrl-c handler")
+    }
+}
+
+#[cfg(target_os = "android")]
+mod platform {
+    use super::Result;
+
+    pub fn set_shutdown_signal_handler<F>(_: F) -> Result<()>
+    where
+        F: Fn() + 'static + Send,
+    {
+        warn!("No shutdown signal handler was registered");
+        Ok(())
     }
 }
 

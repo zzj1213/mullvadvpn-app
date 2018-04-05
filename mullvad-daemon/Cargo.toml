@@ -35,6 +35,8 @@ talpid-types = { path = "../talpid-types" }
 
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"
+
+[target.'cfg(all(unix, not(target_os = "android")))'.dependencies]
 simple-signal = "1.1"
 
 [target.'cfg(windows)'.dependencies]
