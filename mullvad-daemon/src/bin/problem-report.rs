@@ -27,7 +27,6 @@ use std::fmt;
 use std::fs::File;
 use std::io::{self, Read, Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
-use std::process::Command;
 
 /// Maximum number of bytes to read from each log file
 const LOG_MAX_READ_BYTES: usize = 1 * 1024 * 1024;
@@ -370,6 +369,11 @@ fn os_version() -> String {
     )
 }
 
+#[cfg(target_os = "android")]
+fn os_version() -> String {
+    format!("Android")
+}
+
 #[cfg(windows)]
 fn os_version() -> String {
     String::from("Windows")
@@ -378,6 +382,8 @@ fn os_version() -> String {
 /// Helper for getting stdout of some command as a String. Ignores the exit code of the command.
 #[cfg(any(target_os = "linux", target_os = "macos"))]
 fn command_stdout_lossy(cmd: &str, args: &[&str]) -> Option<String> {
+    use std::process::Command;
+
     Command::new(cmd)
         .args(args)
         .output()
