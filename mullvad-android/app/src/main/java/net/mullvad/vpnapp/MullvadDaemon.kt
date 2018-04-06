@@ -22,4 +22,10 @@ class MullvadDaemon {
             Runtime.getRuntime().exec("/system/bin/chmod 750 $MULLVAD_DAEMON_PATH").waitFor()
         }
     }
+
+    fun run(): Process {
+        return ProcessBuilder(MULLVAD_DAEMON_PATH, "--disable-rpc-auth", "-vvv")
+            .redirectErrorStream(true)
+            .start()
+    }
 }
