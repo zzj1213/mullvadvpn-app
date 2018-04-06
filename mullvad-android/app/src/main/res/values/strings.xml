@@ -1,4 +1,4 @@
 <resources>
     <string name="app_name">Mullvad VPN</string>
-    <string name="greeting">Hello, world!</string>
+    <string name="get_state">State</string>
 </resources>

@@ -10,8 +10,19 @@ import android.content.Context
 
 private const val MULLVAD_DAEMON_EXE = "mullvad-daemon"
 private const val MULLVAD_DAEMON_PATH = "/data/data/net.mullvad.vpnapp/files/mullvad-daemon"
+private const val MULLVAD_RPC_ADDRESS_FILE = "/data/data/net.mullvad.vpnapp/files/.mullvad_rpc_address"
 
 class MullvadDaemon {
+    var rpcAddress: String? = null
+        get() {
+            if (field == null) {
+                readRpcAddressFile()
+            }
+
+            return field
+        }
+        private set
+
     fun extract(context: Context) {
         if (!File(MULLVAD_DAEMON_PATH).canExecute()) {
             context
@@ -27,5 +38,11 @@ class MullvadDaemon {
         return ProcessBuilder(MULLVAD_DAEMON_PATH, "--disable-rpc-auth", "-vvv")
             .redirectErrorStream(true)
             .start()
+    }
+
+    private fun readRpcAddressFile() {
+        var lines = File(MULLVAD_RPC_ADDRESS_FILE).readLines()
+
+        rpcAddress = lines[0]
     }
 }

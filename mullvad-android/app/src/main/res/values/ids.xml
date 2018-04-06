@@ -1,3 +1,4 @@
 <resources>
-    <item name="text" type="id"/>
+    <item name="log" type="id"/>
+    <item name="get_state" type="id"/>
 </resources>

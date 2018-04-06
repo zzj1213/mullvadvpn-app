@@ -1,6 +1,7 @@
 package net.mullvad.vpnapp
 
 import kotlinx.coroutines.experimental.launch
+import kotlinx.coroutines.experimental.withContext
 import kotlinx.coroutines.experimental.CommonPool
 import kotlinx.coroutines.experimental.android.UI
 
@@ -8,29 +9,46 @@ import android.app.Activity
 import android.os.Bundle
 import android.widget.TextView
 
-import org.jetbrains.anko.textView
+import org.jetbrains.anko.button
 import org.jetbrains.anko.scrollView
+import org.jetbrains.anko.textResource
+import org.jetbrains.anko.textView
+import org.jetbrains.anko.toast
+import org.jetbrains.anko.verticalLayout
+import org.jetbrains.anko.sdk25.coroutines.onClick
+
+import okhttp3.OkHttpClient
+import okhttp3.Request
 
 import net.mullvad.vpnapp.MullvadDaemon
 
 class MainActivity : Activity() {
     private var logView: TextView? = null
+    private lateinit var daemon: MullvadDaemon
+    private var rpcClient: JsonRpcWsClient? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        var daemon = MullvadDaemon()
+        daemon = MullvadDaemon()
         daemon.extract(this)
 
-        val layout = scrollView {
-            textView {
-                id = R.id.text
+        verticalLayout {
+            button {
+                id = R.id.get_state
+                textResource = R.string.get_state
+                onClick {
+                    getState()
+                }
+            }
+            scrollView {
+                textView {
+                    id = R.id.log
+                }
             }
         }
 
-        setContentView(layout)
-
-        logView = findViewById(R.id.text)
+        logView = findViewById(R.id.log)
 
         launch(CommonPool) {
             val daemonProcess = daemon.run()
@@ -41,6 +59,25 @@ class MainActivity : Activity() {
             }
 
             logLine("\n\n FINISHED (" + daemonProcess.waitFor() + ")")
+        }
+    }
+
+    private fun getState() {
+        launch(CommonPool) {
+            if (rpcClient == null) {
+                val uri = daemon.rpcAddress
+
+                if (uri != null) {
+                    rpcClient = JsonRpcWsClient(uri)
+                    rpcClient?.connect()
+                }
+            }
+
+            val state = rpcClient?.getState()?.await()
+
+            withContext(UI) {
+                toast("State: $$state")
+            }
         }
     }
 
