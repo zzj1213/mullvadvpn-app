@@ -309,10 +309,14 @@ export class DaemonRpc implements DaemonRpcProtocol {
     } catch (error) {
       if (error instanceof JsonRpcRemoteError) {
         switch (error.code) {
-          case -200: // Account doesn't exist
-            throw new InvalidAccountError();
-          case -32603: // Internal error
+          case -10000: // Internal error
+            throw new Error('Unexpected internal error');
+          case -10100: // Unknown API server error
+            throw new Error('Unexpected API server error');
+          case -10101: // Communication with API server error
             throw new CommunicationError();
+          case -10200: // Account doesn't exist
+            throw new InvalidAccountError();
         }
       } else if (error instanceof JsonRpcTimeOutError) {
         throw new NoDaemonError();

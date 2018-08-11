@@ -9,6 +9,7 @@ license = "GPL-3.0"
 chrono = { version = "0.4", features = ["serde"] }
 error-chain = "0.12"
 futures = "0.1.15"
+jsonrpc-core = "8.0"
 jsonrpc-client-core = "0.5"
 jsonrpc-client-http = "0.5"
 lazy_static = "1.0"

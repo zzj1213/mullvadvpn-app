@@ -165,6 +165,48 @@ build_rpc_trait! {
     }
 }
 
+macro_rules! rpc_errors {
+    ( $( $code:expr => $kind:ident : $description:expr ),* $(,)* ) => {
+        pub enum RpcError {
+            $( $kind, )*
+        }
+
+        impl RpcError {
+            pub fn try_from(jsonrpc_error: Error) -> Result<Self, Error> {
+                match jsonrpc_error.code {
+                    $( ErrorCode::ServerError($code) => Ok(RpcError::$kind), )*
+                    _ => Err(jsonrpc_error),
+                }
+            }
+
+            pub fn error_code(&self) -> Option<i32> {
+                match *self {
+                    $( RpcError::$kind => Some($code), )*
+                }
+            }
+        }
+
+        impl From<RpcError> for Error {
+            fn from(rpc_error: RpcError) -> Self {
+                match rpc_error {
+                    $( RpcError::$kind => Error {
+                        code: ErrorCode::ServerError($code),
+                        message: String::from($description),
+                        data: None,
+                    }, )*
+                }
+            }
+        }
+    }
+}
+
+rpc_errors! {
+    -10_000 => InternalError: "An unexpected internal error has ocurred",
+    -10_100 => UnknownRemoteError: "Unknown error received from API server",
+    -10_101 => CommunicationError: "Failed to communicate with API server",
+    -10_200 => InvalidAccount: "Invalid account token",
+}
+
 
 /// Enum representing commands coming in on the management interface.
 pub enum ManagementCommand {
@@ -364,17 +406,32 @@ impl<T: From<ManagementCommand> + 'static + Send> ManagementInterface<T> {
     /// Converts the given error to an error that can be given to the caller of the API.
     /// Will let any actual RPC error through as is, any other error is changed to an internal
     /// error.
-    fn map_rpc_error(error: mullvad_rpc::Error) -> Error {
-        match error.kind() {
-            &mullvad_rpc::ErrorKind::JsonRpcError(ref rpc_error) => {
-                // We have to manually copy the error since we have different
-                // versions of the jsonrpc_core library at the moment.
-                Error {
-                    code: ErrorCode::from(rpc_error.code.code()),
-                    message: rpc_error.message.clone(),
-                    data: rpc_error.data.clone(),
+    fn map_rpc_error(mullvad_rpc::Error(error_kind, _): mullvad_rpc::Error) -> Error {
+        use mullvad_rpc::remote_errors::{Error as RemoteError, ErrorKind as RemoteErrorKind};
+
+        match error_kind {
+            mullvad_rpc::ErrorKind::JsonRpcError(rpc_error) => {
+                match RemoteErrorKind::try_from(rpc_error) {
+                    Ok(RemoteErrorKind::AccountDoesNotExist) => {
+                        Error::from(RpcError::InvalidAccount)
+                    }
+                    Ok(error_kind) => {
+                        let chained_error = RemoteError::from(error_kind)
+                            .chain_err(|| "Received an unexpected error from API server");
+                        warn!("{}", chained_error);
+                        Error::from(RpcError::UnknownRemoteError)
+                    }
+                    Err(error) => {
+                        warn!(
+                            "Received an unknown error from API server: {}: {}",
+                            error.code.code(),
+                            error.message
+                        );
+                        Error::from(RpcError::UnknownRemoteError)
+                    }
                 }
             }
+            mullvad_rpc::ErrorKind::TransportError => Error::from(RpcError::CommunicationError),
             _ => Error::internal_error(),
         }
     }

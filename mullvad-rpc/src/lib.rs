@@ -12,6 +12,7 @@ extern crate error_chain;
 extern crate futures;
 extern crate hyper;
 extern crate hyper_openssl;
+extern crate jsonrpc_core;
 #[macro_use]
 extern crate jsonrpc_client_core;
 extern crate jsonrpc_client_http;
@@ -43,6 +44,7 @@ use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 pub mod event_loop;
+pub mod remote_errors;
 pub mod rest;
 
 mod cached_dns_resolver;
