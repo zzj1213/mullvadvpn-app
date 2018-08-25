@@ -300,12 +300,10 @@ export class DaemonRpc implements DaemonRpcProtocol {
     };
   }
 
-  async getAccountData(accountToken: AccountToken): Promise<AccountData> {
-    // send the IPC with 30s timeout since the backend will wait
-    // for a HTTP request before replying
+  async _call<T>(method: string, schema: mixed, data: mixed, timeout?: number): Promise<T> {
     let response;
     try {
-      response = await this._transport.send('get_account_data', accountToken, 30000);
+      response = await this._transport.send(method, data, timeout);
     } catch (error) {
       if (error instanceof JsonRpcRemoteError) {
         switch (error.code) {
@@ -317,6 +315,8 @@ export class DaemonRpc implements DaemonRpcProtocol {
             throw new CommunicationError();
           case -10200: // Account doesn't exist
             throw new InvalidAccountError();
+          default:
+            throw error;
         }
       } else if (error instanceof JsonRpcTimeOutError) {
         throw new NoDaemonError();
@@ -326,28 +326,35 @@ export class DaemonRpc implements DaemonRpcProtocol {
     }
 
     try {
-      return validate(AccountDataSchema, response);
+      if (typeof schema === 'function') {
+        if (!schema(response)) {
+          throw new Error('Validation failed');
+        } else {
+          return response;
+        }
+      } else {
+        return validate(schema, response);
+      }
     } catch (error) {
-      throw new ResponseParseError('Invalid response from get_account_data', error);
+      throw new ResponseParseError(`Invalid response from ${method}`, error);
     }
+  }
+
+  async getAccountData(accountToken: AccountToken): Promise<AccountData> {
+    // send the IPC with 30s timeout since the backend will wait
+    // for a HTTP request before replying
+    return this._call('get_account_data', AccountDataSchema, accountToken, 30000);
   }
 
   async getRelayLocations(): Promise<RelayList> {
-    const response = await this._transport.send('get_relay_locations');
-    try {
-      return validate(RelayListSchema, response);
-    } catch (error) {
-      throw new ResponseParseError('Invalid response from get_relay_locations', error);
-    }
+    return this._call('get_relay_locations', RelayListSchema);
   }
 
   async getAccount(): Promise<?AccountToken> {
-    const response = await this._transport.send('get_account');
-    if (response === null || typeof response === 'string') {
-      return response;
-    } else {
-      throw new ResponseParseError('Invalid response from get_account', null);
-    }
+    return this._call(
+      'get_account',
+      (response) => response === null || typeof response === 'string',
+    );
   }
 
   async setAccount(accountToken: ?AccountToken): Promise<void> {
@@ -359,25 +366,20 @@ export class DaemonRpc implements DaemonRpcProtocol {
   }
 
   async getRelaySettings(): Promise<RelaySettings> {
-    const response = await this._transport.send('get_relay_settings');
-    try {
-      const validatedObject = validate(RelaySettingsSchema, response);
+    const validatedObject = await this._call('get_relay_settings', RelaySettingsSchema);
 
-      /* $FlowFixMe:
-        There is no way to express constraints with string literals, i.e:
+    /* $FlowFixMe:
+      There is no way to express constraints with string literals, i.e:
 
-        RelaySettingsSchema constraint:
-          oneOf(string, object)
+      RelaySettingsSchema constraint:
+        oneOf(string, object)
 
-        RelaySettings constraint:
-          'any' | object
+      RelaySettings constraint:
+        'any' | object
 
-        These two are incompatible so we simply enforce the type for now.
-      */
-      return ((validatedObject: any): RelaySettings);
-    } catch (e) {
-      throw new ResponseParseError('Invalid response from get_relay_settings', e);
-    }
+      These two are incompatible so we simply enforce the type for now.
+    */
+    return ((validatedObject: any): RelaySettings);
   }
 
   async setAllowLan(allowLan: boolean): Promise<void> {
@@ -385,12 +387,7 @@ export class DaemonRpc implements DaemonRpcProtocol {
   }
 
   async getAllowLan(): Promise<boolean> {
-    const response = await this._transport.send('get_allow_lan');
-    if (typeof response === 'boolean') {
-      return response;
-    } else {
-      throw new ResponseParseError('Invalid response from get_allow_lan', null);
-    }
+    return this._call('get_allow_lan', boolean);
   }
 
   async setOpenVpnEnableIpv6(enableIpv6: boolean): Promise<void> {
@@ -398,18 +395,13 @@ export class DaemonRpc implements DaemonRpcProtocol {
   }
 
   async getTunnelOptions(): Promise<TunnelOptions> {
-    const response = await this._transport.send('get_tunnel_options');
-    try {
-      const validatedObject = validate(TunnelOptionsSchema, response);
+    const validatedObject = await this._call('get_tunnel_options', TunnelOptionsSchema);
 
-      return {
-        openvpn: {
-          enableIpv6: validatedObject.openvpn.enable_ipv6,
-        },
-      };
-    } catch (error) {
-      throw new ResponseParseError('Invalid response from get_tunnel_options', error);
-    }
+    return {
+      openvpn: {
+        enableIpv6: validatedObject.openvpn.enable_ipv6,
+      },
+    };
   }
 
   async setAutoConnect(autoConnect: boolean): Promise<void> {
@@ -417,12 +409,7 @@ export class DaemonRpc implements DaemonRpcProtocol {
   }
 
   async getAutoConnect(): Promise<boolean> {
-    const response = await this._transport.send('get_auto_connect');
-    if (typeof response === 'boolean') {
-      return response;
-    } else {
-      throw new ResponseParseError('Invalid response from get_auto_connect', null);
-    }
+    return this._call('get_auto_connect', boolean);
   }
 
   async connectTunnel(): Promise<void> {
@@ -436,22 +423,11 @@ export class DaemonRpc implements DaemonRpcProtocol {
   async getLocation(): Promise<Location> {
     // send the IPC with 30s timeout since the backend will wait
     // for a HTTP request before replying
-
-    const response = await this._transport.send('get_current_location', [], 30000);
-    try {
-      return validate(LocationSchema, response);
-    } catch (error) {
-      throw new ResponseParseError('Invalid response from get_current_location', error);
-    }
+    return this._call('get_current_location', LocationSchema, [], 30000);
   }
 
   async getState(): Promise<BackendState> {
-    const response = await this._transport.send('get_state');
-    try {
-      return validate(BackendStateSchema, response);
-    } catch (error) {
-      throw new ResponseParseError('Invalid response from get_state', error);
-    }
+    return this._call('get_state', BackendStateSchema);
   }
 
   subscribeStateListener(listener: (state: ?BackendState, error: ?Error) => void): Promise<void> {
@@ -466,12 +442,7 @@ export class DaemonRpc implements DaemonRpcProtocol {
   }
 
   async getAccountHistory(): Promise<Array<AccountToken>> {
-    const response = await this._transport.send('get_account_history');
-    try {
-      return validate(arrayOf(string), response);
-    } catch (error) {
-      throw new ResponseParseError('Invalid response from get_account_history', null);
-    }
+    return this._call('get_account_history', arrayOf(string));
   }
 
   async removeAccountFromHistory(accountToken: AccountToken): Promise<void> {
@@ -479,27 +450,17 @@ export class DaemonRpc implements DaemonRpcProtocol {
   }
 
   async getCurrentVersion(): Promise<string> {
-    const response = await this._transport.send('get_current_version');
-    try {
-      return validate(string, response);
-    } catch (error) {
-      throw new ResponseParseError('Invalid response from get_current_version', null);
-    }
+    return this._call('get_current_version', string);
   }
 
   async getVersionInfo(): Promise<AppVersionInfo> {
-    const response = await this._transport.send('get_version_info');
-    try {
-      const versionInfo = validate(AppVersionInfoSchema, response);
-      return {
-        currentIsSupported: versionInfo.current_is_supported,
-        latest: {
-          latestStable: versionInfo.latest.latest_stable,
-          latest: versionInfo.latest.latest,
-        },
-      };
-    } catch (error) {
-      throw new ResponseParseError('Invalid response from get_version_info', null);
-    }
+    const versionInfo = await this._call('get_version_info', AppVersionInfoSchema);
+    return {
+      currentIsSupported: versionInfo.current_is_supported,
+      latest: {
+        latestStable: versionInfo.latest.latest_stable,
+        latest: versionInfo.latest.latest,
+      },
+    };
   }
 }
