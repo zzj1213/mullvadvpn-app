@@ -3,7 +3,7 @@ copyright: Amagicom AB
 productName: Mullvad VPN
 
 asar: true
-compression: maximum
+compression: store
 
 # assets bundled on all platforms
 extraResources:
@@ -96,6 +96,7 @@ linux:
   target:
     - deb
     - rpm
+    - pacman
   artifactName: MullvadVPN-${version}_${arch}.${ext}
   category: Network
   extraResources:
@@ -134,3 +135,15 @@ rpm:
       - libappindicator
       - libnotify
       - libnsl
+
+pacman:
+  fpm: ["--before-install", "../../../dist-assets/linux/before-install.sh",
+       "--before-remove", "../../../dist-assets/linux/before-remove.sh",
+       "--config-files", "/opt/Mullvad VPN/resources/mullvad-daemon.service",
+       "--config-files", "/opt/Mullvad VPN/resources/mullvad-daemon.conf"]
+  afterInstall: ../../../dist-assets/linux/after-install.sh
+  afterRemove: ../../../dist-assets/linux/after-remove.sh
+  depends:
+    - libnsl
+    - libappindicator-gtk3
+    - libnotify
