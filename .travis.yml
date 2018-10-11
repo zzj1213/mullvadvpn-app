@@ -35,6 +35,30 @@ matrix:
         - cargo build --verbose
         - cargo test --verbose
 
+    # Daemon - Windows
+    - language: rust
+      rust: stable
+      os: windows
+      cache:  &rust_windows_cache
+        directories:
+          - windows\nsis-plugins\bin
+          - windows\windns\bin
+          - windows\winfw\bin
+          - windows\winroute\bin
+      before_script: *rust_before_script
+      script: &rust_windows_script
+        - export PATH="/c/Program Files (x86)/Microsoft Visual Studio/2017/BuildTools/MSBuild/15.0/Bin/amd64/:$PATH"
+        - ./build_windows_modules.sh --dev-build
+        - cargo build --verbose
+        - cargo test --verbose
+
+    - language: rust
+      rust: nightly
+      os: windows
+      cache: *rust_windows_cache
+      before_script: *rust_before_script
+      script: *rust_windows_script
+
     # Daemon - Linux
     - language: rust
       rust: nightly
