@@ -27,7 +27,7 @@ import versionActions from './redux/version/actions';
 import windowActions from './redux/window/actions';
 
 import SettingsProxy from './lib/fetchers/settings-proxy';
-import TunnelStateProxy from './lib/subscription-proxy/tunnel-state-proxy';
+import TunnelStateProxy from './lib/fetchers/tunnel-state-proxy';
 
 import type { WindowShapeParameters } from '../main/window-controller';
 import type {
