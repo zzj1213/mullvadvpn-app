@@ -27,6 +27,7 @@ import versionActions from './redux/version/actions';
 import windowActions from './redux/window/actions';
 
 import AccountDataFetcher from './lib/fetchers/account-data-fetcher';
+import LocationFetcher from './lib/fetchers/location-fetcher';
 import SettingsProxy from './lib/fetchers/settings-proxy';
 import TunnelStateProxy from './lib/fetchers/tunnel-state-proxy';
 
@@ -65,6 +66,7 @@ export default class AppRenderer {
     const expiry = accountData ? accountData.expiry : null;
     this._reduxActions.account.updateAccountExpiry(expiry);
   });
+  _locationFetcher = new LocationFetcher(this._daemonRpc);
   _relayListCache = new RelayListCache(
     () => {
       return this._daemonRpc.getRelayLocations();
@@ -327,7 +329,7 @@ export default class AppRenderer {
   }
 
   async _fetchLocation() {
-    this._reduxActions.connection.newLocation(await this._daemonRpc.getLocation());
+    this._reduxActions.connection.newLocation(await this._locationFetcher.fetch());
   }
 
   async setAllowLan(allowLan: boolean) {
