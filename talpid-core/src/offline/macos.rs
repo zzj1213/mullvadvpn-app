@@ -45,7 +45,7 @@ pub fn is_offline() -> bool {
 fn create_dynamic_store(sender: UnboundedSender<TunnelCommand>) -> Result<SCDynamicStore> {
     let callback_context = SCDynamicStoreCallBackContext {
         callout: primary_interface_change_callback,
-        info: sender,
+        info: (is_offline(), sender),
     };
 
     let store = SCDynamicStoreBuilder::new("talpid-primary-interface")
@@ -74,12 +74,15 @@ fn run_dynamic_store_runloop(store: SCDynamicStore) {
 fn primary_interface_change_callback(
     store: SCDynamicStore,
     _changed_keys: CFArray<CFString>,
-    state: &mut UnboundedSender<TunnelCommand>,
+    state: &mut (bool, UnboundedSender<TunnelCommand>),
 ) {
     let is_offline = store.get(CFString::new(PRIMARY_INTERFACE_KEY)).is_none();
-    debug!(
-        "Computer went {}",
-        if is_offline { "offline" } else { "online" }
-    );
-    let _ = state.unbounded_send(TunnelCommand::IsOffline(is_offline));
+    if is_offline != state.0 {
+        state.0 = is_offline;
+        debug!(
+            "Computer went {}",
+            if is_offline { "offline" } else { "online" }
+        );
+        let _ = state.1.unbounded_send(TunnelCommand::IsOffline(is_offline));
+    }
 }
