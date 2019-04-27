@@ -8,15 +8,18 @@ use std::{
 #[cfg(any(target_os = "linux", target_os = "macos"))]
 use talpid_types::net::wireguard as wireguard_types;
 use talpid_types::net::{openvpn as openvpn_types, GenericTunnelOptions, TunnelParameters};
+use talpid_types::net::{tinc as tinc_types, GenericTunnelOptions, TunnelParameters};
 
 /// A module for all OpenVPN related tunnel management.
 pub mod openvpn;
+pub mod tinc;
 
 #[cfg(any(target_os = "linux", target_os = "macos"))]
 pub mod wireguard;
 
 const OPENVPN_LOG_FILENAME: &str = "openvpn.log";
 const WIREGUARD_LOG_FILENAME: &str = "wireguard.log";
+const TINC_LOG_FILENAME: &str = "tinc.log";
 
 /// Results from operations in the tunnel module.
 pub type Result<T> = std::result::Result<T, Error>;
@@ -145,6 +148,9 @@ impl TunnelMonitor {
             TunnelParameters::OpenVpn(config) => {
                 Self::start_openvpn_tunnel(&config, log_file, resource_dir, on_event)
             }
+            TunnelParameters::Tinc(config) => {
+                Self::start_tinc_tunnel(&config, log_file, resource_dir, on_event)
+            }
             #[cfg(any(target_os = "linux", target_os = "macos"))]
             TunnelParameters::Wireguard(config) => {
                 Self::start_wireguard_tunnel(&config, log_file, on_event)
@@ -189,6 +195,21 @@ impl TunnelMonitor {
         })
     }
 
+    fn start_tinc_tunnel<L>(
+        config: &tinc_types::TunnelParameters,
+        log: Option<PathBuf>,
+        resource_dir: &Path,
+        on_event: L,
+    ) -> Result<Self>
+        where
+            L: Fn(TunnelEvent) + Send + Sync + 'static,
+    {
+        let monitor = tinc::TincMonitor::start(on_event, config, log, resource_dir)?;
+        Ok(TunnelMonitor {
+            monitor: InternalTunnelMonitor::Tinc(monitor),
+        })
+    }
+
     fn ensure_ipv6_can_be_used_if_enabled(tunnel_options: &GenericTunnelOptions) -> Result<()> {
         if tunnel_options.enable_ipv6 && !is_ipv6_enabled_in_os() {
             Err(Error::EnableIpv6Error)
@@ -204,6 +225,7 @@ impl TunnelMonitor {
         if let Some(ref log_dir) = log_dir {
             let filename = match parameters {
                 TunnelParameters::OpenVpn(_) => OPENVPN_LOG_FILENAME,
+                TunnelParameters::Tinc(_) => TINC_LOG_FILENAME,
                 TunnelParameters::Wireguard(_) => WIREGUARD_LOG_FILENAME,
             };
             let tunnel_log = log_dir.join(filename);
@@ -233,6 +255,8 @@ impl TunnelMonitor {
 pub enum CloseHandle {
     /// OpenVpn close handle
     OpenVpn(openvpn::OpenVpnCloseHandle),
+    /// Tinc close handle
+    Tinc(tinc::TincCloseHandle),
     #[cfg(any(target_os = "linux", target_os = "macos"))]
     /// Wireguard close handle
     Wireguard(wireguard::CloseHandle),
@@ -243,6 +267,7 @@ impl CloseHandle {
     pub fn close(self) -> io::Result<()> {
         match self {
             CloseHandle::OpenVpn(handle) => handle.close(),
+            CloseHandle::Tinc(handle) => handle.close(),
             #[cfg(any(target_os = "linux", target_os = "macos"))]
             CloseHandle::Wireguard(mut handle) => {
                 handle.close();
@@ -254,6 +279,7 @@ impl CloseHandle {
 
 enum InternalTunnelMonitor {
     OpenVpn(openvpn::OpenVpnMonitor),
+    Tinc(tinc::TincMonitor),
     #[cfg(any(target_os = "linux", target_os = "macos"))]
     Wireguard(wireguard::WireguardMonitor),
 }
@@ -262,6 +288,7 @@ impl InternalTunnelMonitor {
     fn close_handle(&self) -> CloseHandle {
         match self {
             InternalTunnelMonitor::OpenVpn(tun) => CloseHandle::OpenVpn(tun.close_handle()),
+            InternalTunnelMonitor::Tinc(tun) => CloseHandle::Tinc(tun.close_handle()),
             #[cfg(any(target_os = "linux", target_os = "macos"))]
             InternalTunnelMonitor::Wireguard(tun) => CloseHandle::Wireguard(tun.close_handle()),
         }
@@ -270,6 +297,7 @@ impl InternalTunnelMonitor {
     fn wait(self) -> Result<()> {
         match self {
             InternalTunnelMonitor::OpenVpn(tun) => tun.wait()?,
+            InternalTunnelMonitor::Tinc(tun) => tun.wait()?,
             #[cfg(any(target_os = "linux", target_os = "macos"))]
             InternalTunnelMonitor::Wireguard(tun) => tun.wait()?,
         }
