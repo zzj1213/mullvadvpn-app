@@ -1,6 +1,6 @@
 use crate::{
     location::{CityCode, CountryCode, Hostname},
-    relay_list::{OpenVpnEndpointData, WireguardEndpointData},
+    relay_list::{OpenVpnEndpointData, WireguardEndpointData, TincEndpointData},
     CustomTunnelEndpoint,
 };
 use serde::{Deserialize, Serialize};
@@ -145,6 +145,8 @@ impl fmt::Display for LocationConstraint {
 pub enum TunnelConstraints {
     #[serde(rename = "openvpn")]
     OpenVpn(OpenVpnConstraints),
+    #[serde(rename = "tinc")]
+    Tinc(TincConstraints),
     #[serde(rename = "wireguard")]
     Wireguard(WireguardConstraints),
 }
@@ -204,6 +206,32 @@ impl fmt::Display for OpenVpnConstraints {
 
 impl Match<OpenVpnEndpointData> for OpenVpnConstraints {
     fn matches(&self, endpoint: &OpenVpnEndpointData) -> bool {
+        self.port.matches(&endpoint.port) && self.protocol.matches(&endpoint.protocol)
+    }
+}
+
+#[derive(Debug, Default, Clone, Eq, PartialEq, Deserialize, Serialize)]
+pub struct TincConstraints {
+    pub port: Constraint<u16>,
+    pub protocol: Constraint<TransportProtocol>,
+}
+
+impl fmt::Display for TincConstraints {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
+        match self.port {
+            Constraint::Any => write!(f, "any port")?,
+            Constraint::Only(port) => write!(f, "port {}", port)?,
+        }
+        write!(f, " over ")?;
+        match self.protocol {
+            Constraint::Any => write!(f, "any protocol"),
+            Constraint::Only(protocol) => write!(f, "{}", protocol),
+        }
+    }
+}
+
+impl Match<TincEndpointData> for TincConstraints {
+    fn matches(&self, endpoint: &TincEndpointData) -> bool {
         self.port.matches(&endpoint.port) && self.protocol.matches(&endpoint.protocol)
     }
 }

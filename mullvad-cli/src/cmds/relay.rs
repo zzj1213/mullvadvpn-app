@@ -9,11 +9,11 @@ use std::{
 use mullvad_types::{
     relay_constraints::{
         Constraint, LocationConstraint, OpenVpnConstraints, RelayConstraintsUpdate,
-        RelaySettingsUpdate, TunnelConstraints, WireguardConstraints,
+        RelaySettingsUpdate, TunnelConstraints, WireguardConstraints,TincConstraints,
     },
     ConnectionConfig, CustomTunnelEndpoint,
 };
-use talpid_types::net::{all_of_the_internet, openvpn, wireguard, Endpoint, TransportProtocol};
+use talpid_types::net::{all_of_the_internet, openvpn, wireguard, tinc, Endpoint, TransportProtocol};
 
 pub struct Relay;
 
@@ -107,6 +107,37 @@ impl Command for Relay {
                                         .index(5),
                                 )
                             )
+                            .subcommand(clap::SubCommand::with_name("tinc")
+                                .arg(
+                                    clap::Arg::with_name("host")
+                                        .help("Hostname or IP")
+                                        .required(true)
+                                        .index(1),
+                                )
+                                .arg(
+                                    clap::Arg::with_name("port")
+                                        .help("Remote network port")
+                                        .required(true)
+                                        .index(2),
+                                )
+                                .arg(
+                                    clap::Arg::with_name("protocol")
+                                        .help("Transport protocol. For Wireguard this is ignored.")
+                                        .index(3)
+                                        .default_value("udp")
+                                        .possible_values(&["udp", "tcp"]),
+                                )
+                                .arg(
+                                    clap::Arg::with_name("username")
+                                        .help("Username to be used with the Tinc relay")
+                                        .index(4),
+                                )
+                                .arg(
+                                    clap::Arg::with_name("password")
+                                        .help("Password to be used with the Tinc relay")
+                                        .index(5),
+                                )
+                            )
                     )
                     .subcommand(
                         clap::SubCommand::with_name("location")
@@ -142,7 +173,7 @@ impl Command for Relay {
                                 clap::Arg::with_name("vpn protocol")
                                     .required(true)
                                     .index(1)
-                                    .possible_values(&["wireguard", "openvpn"]),
+                                    .possible_values(&["wireguard", "openvpn", "tinc"]),
                             )
                             .arg(clap::Arg::with_name("port").required(true).index(2))
                             .arg(
@@ -203,6 +234,7 @@ impl Relay {
     fn set_custom(&self, matches: &clap::ArgMatches<'_>) -> Result<()> {
         let custom_endpoint = match matches.subcommand() {
             ("openvpn", Some(openvpn_matches)) => Self::read_custom_openvpn_relay(openvpn_matches),
+            ("tinc", Some(tinc_matches)) => Self::read_custom_tinc_relay(tinc_matches),
             ("wireguard", Some(wg_matches)) => Self::read_custom_wireguard_relay(wg_matches),
             (_unknown_tunnel, _) => unreachable!("No set relay command given"),
         };
@@ -219,6 +251,23 @@ impl Relay {
         CustomTunnelEndpoint::new(
             host,
             ConnectionConfig::OpenVpn(openvpn::ConnectionConfig {
+                endpoint: Endpoint::new(Ipv4Addr::UNSPECIFIED, port, protocol),
+                username,
+                password,
+            }),
+        )
+    }
+
+    fn read_custom_tinc_relay(matches: &clap::ArgMatches<'_>) -> CustomTunnelEndpoint {
+        let host = value_t!(matches.value_of("host"), String).unwrap_or_else(|e| e.exit());
+        let port = value_t!(matches.value_of("port"), u16).unwrap_or_else(|e| e.exit());
+        let username = value_t!(matches.value_of("username"), String).unwrap_or_else(|e| e.exit());
+        let password = value_t!(matches.value_of("password"), String).unwrap_or_else(|e| e.exit());
+        let protocol =
+            value_t!(matches.value_of("protocol"), TransportProtocol).unwrap_or_else(|e| e.exit());
+        CustomTunnelEndpoint::new(
+            host,
+            ConnectionConfig::Tinc(openvpn::ConnectionConfig {
                 endpoint: Endpoint::new(Ipv4Addr::UNSPECIFIED, port, protocol),
                 username,
                 password,
@@ -349,6 +398,14 @@ impl Relay {
                     location: None,
                     tunnel: Some(Constraint::Only(TunnelConstraints::OpenVpn(
                         OpenVpnConstraints { port, protocol },
+                    ))),
+                }))
+            }
+            "tinc" => {
+                self.update_constraints(RelaySettingsUpdate::Normal(RelayConstraintsUpdate {
+                    location: None,
+                    tunnel: Some(Constraint::Only(TunnelConstraints::Tinc(
+                        TincConstraints { port, protocol },
                     ))),
                 }))
             }
