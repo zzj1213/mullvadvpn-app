@@ -280,6 +280,18 @@ impl Firewall {
         rules.push(allow_net_v6);
         rules.push(allow_multicast_v6);
 
+        let mdns_port = pfctl::Port::from(5353);
+        for mdns6_address in &*super::MDNS_INET6_ADDRS {
+            let allow_mdns_v6 = rule_builder
+                .to(pfctl::Endpoint::new(
+                    pfctl::Ip::from(*mdns6_address),
+                    mdns_port,
+                ))
+                .proto(pfctl::Proto::Udp)
+                .build()?;
+            rules.push(allow_mdns_v6);
+        }
+
         Ok(rules)
     }
 

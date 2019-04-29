@@ -42,6 +42,10 @@ lazy_static! {
         IpNetwork::V4(Ipv4Network::new(Ipv4Addr::new(224, 0, 0, 0), 24).unwrap());
     static ref MULTICAST_INET6_NET: IpNetwork =
         IpNetwork::V6(Ipv6Network::new(Ipv6Addr::new(0xfe02, 0, 0, 0, 0, 0, 0, 0), 16).unwrap());
+    static ref MDNS_INET6_ADDRS: [IpAddr; 2] = [
+        IpAddr::V6(Ipv6Addr::new(0xff02, 0, 0, 0, 0, 0, 0, 0xfb)),
+        IpAddr::V6(Ipv6Addr::new(0xff05, 0, 0, 0, 0, 0, 0, 0xfb)),
+    ];
     static ref SSDP_IP: IpAddr = IpAddr::V4(Ipv4Addr::new(239, 255, 255, 250));
     static ref DHCPV6_SERVER_ADDRS: [IpAddr; 2] = [
         IpAddr::V6(Ipv6Addr::new(0xff02, 0, 0, 0, 0, 0, 1, 2)),
