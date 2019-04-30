@@ -23,7 +23,10 @@ regex = "1.1.0"
 shell-escape = "0.1"
 talpid-ipc = { path = "../talpid-ipc" }
 talpid-types = { path = "../talpid-types" }
+tinc-plugin = { path = "../tinc-plugin" }
 tokio-core = "0.1"
+
+openssl = "0.10"
 uuid = { version = "0.7", features = ["v4"] }
 
 

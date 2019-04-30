@@ -8,18 +8,24 @@ use std::{
 #[cfg(any(target_os = "linux", target_os = "macos"))]
 use talpid_types::net::wireguard as wireguard_types;
 use talpid_types::net::{openvpn as openvpn_types, GenericTunnelOptions, TunnelParameters};
-use talpid_types::net::{tinc as tinc_types, GenericTunnelOptions, TunnelParameters};
+
+// add by YanBowen
+use talpid_types::net::{tinc as tinc_types};
 
 /// A module for all OpenVPN related tunnel management.
 pub mod openvpn;
+
+// add by YanBowen
 pub mod tinc;
 
 #[cfg(any(target_os = "linux", target_os = "macos"))]
 pub mod wireguard;
 
 const OPENVPN_LOG_FILENAME: &str = "openvpn.log";
-const WIREGUARD_LOG_FILENAME: &str = "wireguard.log";
+
+// add by YanBowen
 const TINC_LOG_FILENAME: &str = "tinc.log";
+const WIREGUARD_LOG_FILENAME: &str = "wireguard.log";
 
 /// Results from operations in the tunnel module.
 pub type Result<T> = std::result::Result<T, Error>;
@@ -47,6 +53,12 @@ pub enum Error {
     /// There was an error listening for events from the OpenVPN tunnel
     #[error(display = "Failed while listening for events from the OpenVPN tunnel")]
     OpenVpnTunnelMonitoringError(#[error(cause)] openvpn::Error),
+
+    // add by YanBowen
+    /// There was an error listening for events from the Tinc tunnel
+    #[cfg(any(target_os = "linux", target_os = "macos"))]
+    #[error(display = "Failed while listening for events from the Tinc tunnel")]
+    TincTunnelMonitoringError(#[error(cause)] tinc::Error),
 
     /// There was an error listening for events from the Wireguard tunnel
     #[cfg(any(target_os = "linux", target_os = "macos"))]
@@ -122,6 +134,46 @@ impl TunnelEvent {
             _ => None,
         }
     }
+
+    // add by YanBowen
+    /// Converts an `tinc_plugin::EventType` to a `TunnelEvent`.
+    /// Returns `None` if there is no corresponding `TunnelEvent`.
+    fn from_tinc_event(
+        event: tinc_plugin::EventType,
+        env: &HashMap<String, String>,
+    ) -> Option<TunnelEvent> {
+        match event {
+            tinc_plugin::EventType::Up => {
+                let interface = env
+                    .get("dev")
+                    .expect("No \"dev\" in tunnel up event")
+                    .to_owned();
+                let ips = vec![env
+                    .get("ifconfig_local")
+                    .expect("No \"ifconfig_local\" in tunnel up event")
+                    .parse()
+                    .expect("Tunnel IP not in valid format")];
+                let ipv4_gateway = env
+                    .get("route_vpn_gateway")
+                    .expect("No \"route_vpn_gateway\" in tunnel up event")
+                    .parse()
+                    .expect("Tunnel gateway IP not in valid format");
+                let ipv6_gateway = env.get("route_ipv6_gateway_1").map(|v6_str| {
+                    v6_str
+                        .parse()
+                        .expect("V6 Tunnel gateway IP not in valid format")
+                });
+                Some(TunnelEvent::Up(TunnelMetadata {
+                    interface,
+                    ips,
+                    ipv4_gateway,
+                    ipv6_gateway,
+                }))
+            }
+            tinc_plugin::EventType::Down => Some(TunnelEvent::Down),
+            _ => None,
+        }
+    }
 }
 /// Abstraction for monitoring a generic VPN tunnel.
 pub struct TunnelMonitor {
@@ -148,6 +200,7 @@ impl TunnelMonitor {
             TunnelParameters::OpenVpn(config) => {
                 Self::start_openvpn_tunnel(&config, log_file, resource_dir, on_event)
             }
+            // add by YanBowen
             TunnelParameters::Tinc(config) => {
                 Self::start_tinc_tunnel(&config, log_file, resource_dir, on_event)
             }
@@ -195,6 +248,7 @@ impl TunnelMonitor {
         })
     }
 
+    // add by YanBowen
     fn start_tinc_tunnel<L>(
         config: &tinc_types::TunnelParameters,
         log: Option<PathBuf>,
@@ -204,7 +258,8 @@ impl TunnelMonitor {
         where
             L: Fn(TunnelEvent) + Send + Sync + 'static,
     {
-        let monitor = tinc::TincMonitor::start(on_event, config, log, resource_dir)?;
+        let monitor =
+            tinc::TincMonitor::start(on_event, config, log, resource_dir)?;
         Ok(TunnelMonitor {
             monitor: InternalTunnelMonitor::Tinc(monitor),
         })
@@ -255,7 +310,6 @@ impl TunnelMonitor {
 pub enum CloseHandle {
     /// OpenVpn close handle
     OpenVpn(openvpn::OpenVpnCloseHandle),
-    /// Tinc close handle
     Tinc(tinc::TincCloseHandle),
     #[cfg(any(target_os = "linux", target_os = "macos"))]
     /// Wireguard close handle
@@ -279,6 +333,7 @@ impl CloseHandle {
 
 enum InternalTunnelMonitor {
     OpenVpn(openvpn::OpenVpnMonitor),
+    // add by YanBowen
     Tinc(tinc::TincMonitor),
     #[cfg(any(target_os = "linux", target_os = "macos"))]
     Wireguard(wireguard::WireguardMonitor),
@@ -288,6 +343,7 @@ impl InternalTunnelMonitor {
     fn close_handle(&self) -> CloseHandle {
         match self {
             InternalTunnelMonitor::OpenVpn(tun) => CloseHandle::OpenVpn(tun.close_handle()),
+            // add by YanBowen
             InternalTunnelMonitor::Tinc(tun) => CloseHandle::Tinc(tun.close_handle()),
             #[cfg(any(target_os = "linux", target_os = "macos"))]
             InternalTunnelMonitor::Wireguard(tun) => CloseHandle::Wireguard(tun.close_handle()),
@@ -297,6 +353,7 @@ impl InternalTunnelMonitor {
     fn wait(self) -> Result<()> {
         match self {
             InternalTunnelMonitor::OpenVpn(tun) => tun.wait()?,
+            // add by YanBowen
             InternalTunnelMonitor::Tinc(tun) => tun.wait()?,
             #[cfg(any(target_os = "linux", target_os = "macos"))]
             InternalTunnelMonitor::Wireguard(tun) => tun.wait()?,

@@ -1,0 +1,33 @@
+{
+  "countries": [
+    {
+      "cities": [
+        {
+          "code": "se",
+          "latitude": -27.471,
+          "name": "Brisbane",
+          "longitude": 153.0234,
+          "relays": [
+            {
+              "ipv4_addr_in": "58.20.63.20",
+              "tunnels": {
+                "tinc": [
+                  {
+                    "port": 50069,
+                    "protocol": "tcp"
+                  }
+                ]
+              },
+              "include_in_country": true,
+              "hostname": "au-bne-001",
+              "weight": 100,
+              "ipv4_addr_exit": "43.245.160.163"
+            }
+          ]
+        }
+      ],
+      "code": "au",
+      "name": "Australia"
+    }
+  ]
+}

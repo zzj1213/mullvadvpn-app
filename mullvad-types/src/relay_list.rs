@@ -56,18 +56,24 @@ pub struct Relay {
 #[serde(default)]
 pub struct RelayTunnels {
     pub openvpn: Vec<OpenVpnEndpointData>,
+
+    // add by YanBowen
     pub tinc: Vec<TincEndpointData>,
     pub wireguard: Vec<WireguardEndpointData>,
 }
 
 impl RelayTunnels {
     pub fn is_empty(&self) -> bool {
-        self.openvpn.is_empty() && self.wireguard.is_empty()
+        // add && self.tinc.is_empty() by YanBowen
+        self.openvpn.is_empty() && self.tinc.is_empty() && self.wireguard.is_empty()
     }
 
     pub fn clear(&mut self) {
         self.openvpn.clear();
+
+        // add by YanBowen
         self.tinc.clear();
+
         self.wireguard.clear();
     }
 }
@@ -85,6 +91,25 @@ impl OpenVpnEndpointData {
 }
 
 impl fmt::Display for OpenVpnEndpointData {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
+        write!(f, "{} port {}", self.protocol, self.port)
+    }
+}
+
+// struct add by YanBowen
+#[derive(Debug, Copy, Clone, Eq, PartialEq, Hash, Deserialize, Serialize)]
+pub struct TincEndpointData {
+    pub port: u16,
+    pub protocol: TransportProtocol,
+}
+
+impl TincEndpointData {
+    pub fn into_mullvad_endpoint(self, host: IpAddr) -> MullvadEndpoint {
+        MullvadEndpoint::Tinc(Endpoint::new(host, self.port, self.protocol))
+    }
+}
+
+impl fmt::Display for TincEndpointData {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
         write!(f, "{} port {}", self.protocol, self.port)
     }
@@ -115,23 +140,5 @@ impl fmt::Display for WireguardEndpointData {
                 .join(","),
             self.public_key,
         )
-    }
-}
-
-#[derive(Debug, Copy, Clone, Eq, PartialEq, Hash, Deserialize, Serialize)]
-pub struct TincEndpointData {
-    pub port: u16,
-    pub protocol: TransportProtocol,
-}
-
-impl TincEndpointData {
-    pub fn into_mullvad_endpoint(self, host: IpAddr) -> MullvadEndpoint {
-        MullvadEndpoint::Tinc(Endpoint::new(host, self.port, self.protocol))
-    }
-}
-
-impl fmt::Display for TincEndpointData {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
-        write!(f, "{} port {}", self.protocol, self.port)
     }
 }

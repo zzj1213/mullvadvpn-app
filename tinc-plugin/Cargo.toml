@@ -1,0 +1,20 @@
+[package]
+name = "tinc-plugin"
+version = "0.1.0"
+authors = ["bowen.yan <bowen.yan@siteview.com>"]
+edition = "2018"
+
+[[bin]]
+path = "./src/main.rs"
+name = "tinc-plugin"
+
+[dependencies]
+#serde = { version = "1.0", optional = true, features = ["derive"] }
+tokio = "0.1"
+futures = "0.1"
+derive-try-from-primitive = "0.1.0"
+serde_derive = "1.0"
+serde = "1.0"
+talpid-ipc = { path = "../talpid-ipc"}
+jsonrpc-client-core = { git = "https://github.com/mullvad/jsonrpc-client-rs", rev = "68aac55b" }
+jsonrpc-client-ipc = { git = "https://github.com/mullvad/jsonrpc-client-rs", rev = "68aac55b" }

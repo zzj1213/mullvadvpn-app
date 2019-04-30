@@ -1,0 +1,39 @@
+{
+  "account_token": "0",
+  "relay_settings": {
+    "normal": {
+      "location": "any",
+      "tunnel": {
+        "only": {
+          "tinc": {
+            "port": "any",
+            "protocol": {
+              "only": "tcp"
+            }
+          }
+        }
+      }
+    }
+  },
+  "allow_lan": false,
+  "block_when_disconnected": false,
+  "auto_connect": false,
+  "tunnel_options": {
+    "openvpn": {
+      "mssfix": null,
+      "proxy": {
+        "remote": {
+          "address": "192.168.1.11:1080",
+          "auth": null
+        }
+      }
+    }
+  },
+  "wireguard": {
+    "mtu": null,
+    "fwmark": 787878
+  },
+  "generic": {
+    "enable_ipv6": false
+  }
+}

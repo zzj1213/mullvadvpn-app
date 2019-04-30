@@ -7,11 +7,16 @@ use talpid_types::net::{wireguard, Endpoint, TransportProtocol};
 
 use crate::relay_list::{OpenVpnEndpointData, WireguardEndpointData};
 
+// add by YanBowen
+use crate::relay_list::TincEndpointData;
 
 /// Contains server data needed to conenct to a single mullvad endpoint
 #[derive(Debug, Clone)]
 pub enum MullvadEndpoint {
     OpenVpn(Endpoint),
+
+    // add by YanBowen
+    Tinc(Endpoint),
     Wireguard {
         peer: wireguard::PeerConfig,
         ipv4_gateway: Ipv4Addr,
@@ -24,6 +29,10 @@ impl MullvadEndpoint {
     pub fn to_endpoint(&self) -> Endpoint {
         match self {
             MullvadEndpoint::OpenVpn(endpoint) => *endpoint,
+
+            // add by YanBowen
+            MullvadEndpoint::Tinc(endpoint) => *endpoint,
+
             MullvadEndpoint::Wireguard {
                 peer,
                 ipv4_gateway: _,
@@ -43,6 +52,12 @@ pub enum TunnelEndpointData {
     /// Extra parameters for an OpenVPN tunnel endpoint.
     #[serde(rename = "openvpn")]
     OpenVpn(OpenVpnEndpointData),
+
+    // add by YanBowen
+    /// Extra parameters for an Tinc tunnel endpoint.
+    #[serde(rename = "tinc")]
+    Tinc(TincEndpointData),
+
     /// Extra parameters for a Wireguard tunnel endpoint.
     #[serde(rename = "wireguard")]
     Wireguard(WireguardEndpointData),
@@ -50,6 +65,13 @@ pub enum TunnelEndpointData {
 impl From<OpenVpnEndpointData> for TunnelEndpointData {
     fn from(endpoint_data: OpenVpnEndpointData) -> TunnelEndpointData {
         TunnelEndpointData::OpenVpn(endpoint_data)
+    }
+}
+
+// add by YanBowen
+impl From<TincEndpointData> for TunnelEndpointData {
+    fn from(endpoint_data: TincEndpointData) -> TunnelEndpointData {
+        TunnelEndpointData::Tinc(endpoint_data)
     }
 }
 
@@ -66,6 +88,13 @@ impl fmt::Display for TunnelEndpointData {
                 write!(f, "OpenVPN ")?;
                 openvpn_data.fmt(f)
             }
+
+            // add by YanBowen
+            TunnelEndpointData::Tinc(tinc_data) => {
+                write!(f, "Tinc ")?;
+                tinc_data.fmt(f)
+            }
+
             TunnelEndpointData::Wireguard(wireguard_data) => {
                 write!(f, "Wireguard ")?;
                 wireguard_data.fmt(f)

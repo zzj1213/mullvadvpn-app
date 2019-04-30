@@ -1,6 +1,6 @@
 use crate::{
     location::{CityCode, CountryCode, Hostname},
-    relay_list::{OpenVpnEndpointData, WireguardEndpointData, TincEndpointData},
+    relay_list::{OpenVpnEndpointData, TincEndpointData, WireguardEndpointData},
     CustomTunnelEndpoint,
 };
 use serde::{Deserialize, Serialize};
@@ -158,6 +158,10 @@ impl fmt::Display for TunnelConstraints {
                 write!(f, "OpenVPN over ")?;
                 openvpn_constraints.fmt(f)
             }
+            TunnelConstraints::Tinc(tinc_constraints) => {
+                write!(f, "Tinc over ")?;
+                tinc_constraints.fmt(f)
+            }
             TunnelConstraints::Wireguard(wireguard_constraints) => {
                 write!(f, "Wireguard over ")?;
                 wireguard_constraints.fmt(f)
@@ -170,6 +174,16 @@ impl Match<OpenVpnEndpointData> for TunnelConstraints {
     fn matches(&self, endpoint: &OpenVpnEndpointData) -> bool {
         match *self {
             TunnelConstraints::OpenVpn(ref constraints) => constraints.matches(endpoint),
+            _ => false,
+        }
+    }
+}
+
+// add by YanBowen
+impl Match<TincEndpointData> for TunnelConstraints {
+    fn matches(&self, endpoint: &TincEndpointData) -> bool {
+        match *self {
+            TunnelConstraints::Tinc(ref constraints) => constraints.matches(endpoint),
             _ => false,
         }
     }
@@ -210,6 +224,7 @@ impl Match<OpenVpnEndpointData> for OpenVpnConstraints {
     }
 }
 
+// add by YanBowen
 #[derive(Debug, Default, Clone, Eq, PartialEq, Deserialize, Serialize)]
 pub struct TincConstraints {
     pub port: Constraint<u16>,

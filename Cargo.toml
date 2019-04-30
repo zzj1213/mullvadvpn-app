@@ -9,6 +9,7 @@ members = [
     "mullvad-rpc",
     "mullvad-tests",
     "talpid-openvpn-plugin",
+    "tinc-plugin",
     "talpid-core",
     "talpid-ipc",
 ]

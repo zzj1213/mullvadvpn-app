@@ -370,6 +370,14 @@ impl RelaySelector {
                 .filter(|endpoint| tunnel_constraints.matches(*endpoint))
                 .cloned()
                 .collect(),
+
+            // add by YanBowen
+            tinc: tunnels
+                .tinc
+                .iter()
+                .filter(|endpoint| tunnel_constraints.matches(*endpoint))
+                .cloned()
+                .collect(),
             wireguard: tunnels
                 .wireguard
                 .iter()
@@ -413,6 +421,16 @@ impl RelaySelector {
         match constraints {
             // TODO: Handle Constraint::Any case by selecting from both openvpn and wireguard
             // tunnels once wireguard is mature enough
+
+            // Tinc tunnel
+            // add by YanBowen
+            Constraint::Only(TunnelConstraints::OpenVpn(_)) | Constraint::Any => relay
+                .tunnels
+                .tinc
+                .choose(&mut self.rng)
+                .cloned()
+                .map(|endpoint| endpoint.into_mullvad_endpoint(relay.ipv4_addr_in.into())),
+
             Constraint::Only(TunnelConstraints::OpenVpn(_)) | Constraint::Any => relay
                 .tunnels
                 .openvpn
@@ -536,9 +554,10 @@ impl RelayListUpdater {
     ) -> RelayListUpdaterHandle {
         let (tx, rx) = mpsc::channel();
 
-        thread::spawn(move || {
-            Self::new(rpc_handle, cache_path, parsed_relays, on_update, rx).run()
-        });
+//        modify by YanBowen
+//        thread::spawn(move || {
+//            Self::new(rpc_handle, cache_path, parsed_relays, on_update, rx).run()
+//        });
 
         tx
     }

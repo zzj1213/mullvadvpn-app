@@ -6,6 +6,8 @@ use serde::{Deserialize, Serialize};
 use serde_json;
 use std::{fs::File, io, path::PathBuf};
 use talpid_types::net::{openvpn, wireguard, GenericTunnelOptions};
+// add by YanBowen
+use talpid_types::net::tinc;
 
 
 pub type Result<T> = std::result::Result<T, Error>;
@@ -242,6 +244,10 @@ impl Settings {
 pub struct TunnelOptions {
     /// openvpn holds OpenVPN specific tunnel options.
     pub openvpn: openvpn::TunnelOptions,
+
+    // add by YanBowen
+    /// tinc holds tinc specific tunnel options.
+    pub tinc: tinc::TunnelOptions,
     /// Contains wireguard tunnel options.
     pub wireguard: wireguard::TunnelOptions,
     /// Contains generic tunnel options that may apply to more than a single tunnel type.
@@ -252,6 +258,9 @@ impl Default for TunnelOptions {
     fn default() -> Self {
         TunnelOptions {
             openvpn: openvpn::TunnelOptions::default(),
+
+            // add by YanBowen
+            tinc: tinc::TunnelOptions::default(),
             wireguard: wireguard::TunnelOptions { mtu: None },
             generic: GenericTunnelOptions { enable_ipv6: false },
         }

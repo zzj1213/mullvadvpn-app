@@ -6,6 +6,8 @@ use std::{
 };
 use talpid_types::net::{openvpn, wireguard, TunnelParameters};
 
+// add by YanBowen
+use talpid_types::net::tinc;
 
 #[derive(err_derive::Error, Debug)]
 pub enum Error {
@@ -40,6 +42,14 @@ impl CustomTunnelEndpoint {
             ConnectionConfig::OpenVpn(config) => openvpn::TunnelParameters {
                 config,
                 options: tunnel_options.openvpn.clone(),
+                generic_options: tunnel_options.generic.clone(),
+            }
+            .into(),
+
+            // add by YanBowen
+            ConnectionConfig::Tinc(config) => tinc::TunnelParameters {
+                config,
+                options: tunnel_options.tinc.clone(),
                 generic_options: tunnel_options.generic.clone(),
             }
             .into(),

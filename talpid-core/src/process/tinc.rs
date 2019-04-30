@@ -1,431 +1,386 @@
-use duct;
+use std::path;
+use std::fs;
+use std::io::{self, Write, Read};
+use std::ffi::OsString;
+#[cfg(unix)]
+use std::os::unix::fs::PermissionsExt;
 
-use super::stoppable_process::StoppableProcess;
-use atty;
-use os_pipe::{pipe, PipeWriter};
-use parking_lot::Mutex;
-use shell_escape;
-use std::{
-    ffi::{OsStr, OsString},
-    fmt, io,
-    path::{Path, PathBuf},
-};
-use talpid_types::net;
+pub type Result<T> = std::result::Result<T, Error>;
 
-static BASE_ARGUMENTS: &[&[&str]] = &[
-    &["--client"],
-    &["--nobind"],
-    #[cfg(not(windows))]
-    &["--dev", "tun"],
-    #[cfg(windows)]
-    &["--dev-type", "tun"],
-    &["--ping", "4"],
-    &["--ping-exit", "20"],
-    &["--connect-timeout", "30"],
-    &["--connect-retry", "0", "0"],
-    &["--connect-retry-max", "1"],
-    &["--remote-cert-tls", "server"],
-    &["--rcvbuf", "1048576"],
-    &["--sndbuf", "1048576"],
-    &["--fast-io"],
-    &["--cipher", "AES-256-CBC"],
-    &["--verb", "3"],
-    #[cfg(windows)]
-    &[
-        "--route-gateway",
-        "dhcp",
-        "--route",
-        "0.0.0.0",
-        "0.0.0.0",
-        "vpn_gateway",
-        "1",
-    ],
-];
+#[derive(err_derive::Error, Debug)]
+pub enum Error {
+    #[error(display = "duct can not start tinc")]
+    StartTincError,
 
-static ALLOWED_TLS_CIPHERS: &[&str] = &[
-    "TLS-DHE-RSA-WITH-AES-256-GCM-SHA384",
-    "TLS-DHE-RSA-WITH-AES-256-CBC-SHA",
-];
+    #[error(display = "duct can not stop tinc")]
+    StopTincError,
 
-/// An OpenVPN process builder, providing control over the different arguments that the OpenVPN
-/// binary accepts.
-#[derive(Clone)]
-pub struct OpenVpnCommand {
-    tinc_bin: OsString,
-    config: Option<PathBuf>,
-    remote: Option<net::Endpoint>,
-    user_pass_path: Option<PathBuf>,
-    proxy_auth_path: Option<PathBuf>,
-    ca: Option<PathBuf>,
-    crl: Option<PathBuf>,
-    iproute_bin: Option<OsString>,
-    plugin: Option<(PathBuf, Vec<String>)>,
-    log: Option<PathBuf>,
-    tunnel_options: net::openvpn::TunnelOptions,
-    tunnel_alias: Option<OsString>,
-    enable_ipv6: bool,
-    proxy_port: Option<u16>,
+    #[error(display = "tinc process not exist")]
+    TincNotExist,
+
+    #[error(display = "tinc host file not exist")]
+    FileNotExist(String),
+
+    #[error(display = "tinc can't create key pair")]
+    CreatePubKeyError,
 }
+const TINC_AUTH_PATH: &str = "auth/";
+const TINC_AUTH_FILENAME: &str = "auth.txt";
 
-impl OpenVpnCommand {
-    /// Constructs a new `OpenVpnCommand` for launching OpenVPN processes from the binary at
-    /// `tinc_bin`.
-    pub fn new<P: AsRef<OsStr>>(openvpn_bin: P) -> Self {
+pub struct TincCommand {
+    tinc_home:          String,
+    pub_key_path:       String,
+    tinc_handle:        Option<duct::Handle>,
+}
+impl TincCommand {
+    pub fn new(tinc_home: String) -> Self {
+        let pub_key_path = tinc_home.clone() + "/key/rsa_key.pub";
         TincCommand {
-            openvpn_bin: OsString::from(openvpn_bin.as_ref()),
-            config: None,
-            remote: None,
-            user_pass_path: None,
-            proxy_auth_path: None,
-            ca: None,
-            crl: None,
-            iproute_bin: None,
-            plugin: None,
-            log: None,
-            tunnel_options: net::openvpn::TunnelOptions::default(),
-            tunnel_alias: None,
-            enable_ipv6: true,
-            proxy_port: None,
+            tinc_home,
+            pub_key_path,
+            tinc_handle: None,
         }
     }
 
-    /// Sets what configuration file will be given to OpenVPN
-    pub fn config(&mut self, path: impl AsRef<Path>) -> &mut Self {
-        self.config = Some(path.as_ref().to_path_buf());
-        self
-    }
-
-    /// Sets the address and protocol that OpenVPN will connect to.
-    pub fn remote(&mut self, remote: net::Endpoint) -> &mut Self {
-        self.remote = Some(remote);
-        self
-    }
-
-    /// Sets the path to the file where the username and password for user-pass authentication
-    /// is stored. See the `--auth-user-pass` OpenVPN documentation for details.
-    pub fn user_pass(&mut self, path: impl AsRef<Path>) -> &mut Self {
-        self.user_pass_path = Some(path.as_ref().to_path_buf());
-        self
-    }
-
-    /// Sets the path to the file where the username and password for proxy authentication
-    /// is stored.
-    pub fn proxy_auth(&mut self, path: impl AsRef<Path>) -> &mut Self {
-        self.proxy_auth_path = Some(path.as_ref().to_path_buf());
-        self
-    }
-
-    /// Sets the path to the CA certificate file.
-    pub fn ca(&mut self, path: impl AsRef<Path>) -> &mut Self {
-        self.ca = Some(path.as_ref().to_path_buf());
-        self
-    }
-
-    /// Sets the path to the CRL (Certificate revocation list) file.
-    pub fn crl(&mut self, path: impl AsRef<Path>) -> &mut Self {
-        self.crl = Some(path.as_ref().to_path_buf());
-        self
-    }
-
-    /// Sets the path to the ip route command.
-    pub fn iproute_bin(&mut self, iproute_bin: impl Into<OsString>) -> &mut Self {
-        self.iproute_bin = Some(iproute_bin.into());
-        self
-    }
-
-    /// Sets a plugin and its arguments that OpenVPN will be started with.
-    pub fn plugin(&mut self, path: impl AsRef<Path>, args: Vec<String>) -> &mut Self {
-        self.plugin = Some((path.as_ref().to_path_buf(), args));
-        self
-    }
-
-    /// Sets a log file path.
-    pub fn log(&mut self, path: impl AsRef<Path>) -> &mut Self {
-        self.log = Some(path.as_ref().to_path_buf());
-        self
-    }
-
-    /// Sets extra options
-    pub fn tunnel_options(&mut self, tunnel_options: &net::openvpn::TunnelOptions) -> &mut Self {
-        self.tunnel_options = tunnel_options.clone();
-        self
-    }
-
-    /// Sets the tunnel alias which will be used to identify a tunnel device that will be used by
-    /// OpenVPN.
-    pub fn tunnel_alias(&mut self, tunnel_alias: Option<OsString>) -> &mut Self {
-        self.tunnel_alias = tunnel_alias;
-        self
-    }
-
-    /// Configures if IPv6 should be allowed in the tunnel.
-    pub fn enable_ipv6(&mut self, enable_ipv6: bool) -> &mut Self {
-        self.enable_ipv6 = enable_ipv6;
-        self
-    }
-
-    /// Sets the local proxy port bound to.
-    /// In case of dynamic port selection, this will only be known after the proxy has been started.
-    pub fn proxy_port(&mut self, proxy_port: u16) -> &mut Self {
-        self.proxy_port = Some(proxy_port);
-        self
-    }
-
-    /// Build a runnable expression from the current state of the command.
-    pub fn build(&self) -> duct::Expression {
-        log::debug!("Building expression: {}", &self);
-        duct::cmd(&self.openvpn_bin, self.get_arguments()).unchecked()
-    }
-
-    /// Returns all arguments that the subprocess would be spawned with.
-    fn get_arguments(&self) -> Vec<OsString> {
-        let mut args: Vec<OsString> = Self::base_arguments().iter().map(OsString::from).collect();
-
-        if let Some(ref config) = self.config {
-            args.push(OsString::from("--config"));
-            args.push(OsString::from(config.as_os_str()));
-        }
-
-        args.extend(self.remote_arguments().iter().map(OsString::from));
-        args.extend(self.authentication_arguments());
-
-        if let Some(ref iproute_bin) = self.iproute_bin {
-            args.push(OsString::from("--iproute"));
-            args.push(iproute_bin.clone());
-        }
-
-        if let Some(ref ca) = self.ca {
-            args.push(OsString::from("--ca"));
-            args.push(OsString::from(ca.as_os_str()));
-        }
-        if let Some(ref crl) = self.crl {
-            args.push(OsString::from("--crl-verify"));
-            args.push(OsString::from(crl.as_os_str()));
-        }
-
-        if let Some((ref path, ref plugin_args)) = self.plugin {
-            args.push(OsString::from("--plugin"));
-            args.push(OsString::from(path));
-            args.extend(plugin_args.iter().map(OsString::from));
-        }
-
-        if let Some(ref path) = self.log {
-            args.push(OsString::from("--log"));
-            args.push(OsString::from(path))
-        }
-
-        if let Some(mssfix) = self.tunnel_options.mssfix {
-            args.push(OsString::from("--mssfix"));
-            args.push(OsString::from(mssfix.to_string()));
-        }
-
-        if !self.enable_ipv6 {
-            args.push(OsString::from("--pull-filter"));
-            args.push(OsString::from("ignore"));
-            args.push(OsString::from("route-ipv6"));
-
-            args.push(OsString::from("--pull-filter"));
-            args.push(OsString::from("ignore"));
-            args.push(OsString::from("ifconfig-ipv6"));
-        }
-
-        if let Some(ref tunnel_device) = self.tunnel_alias {
-            args.push(OsString::from("--dev-node"));
-            args.push(tunnel_device.clone());
-        }
-
-        args.extend(Self::security_arguments().iter().map(OsString::from));
-        args.extend(self.proxy_arguments().iter().map(OsString::from));
-
-        args
-    }
-
-    fn base_arguments() -> Vec<&'static str> {
-        let mut args = vec![];
-        for arglist in BASE_ARGUMENTS.iter() {
-            for arg in arglist.iter() {
-                args.push(*arg);
-            }
-        }
-        args
-    }
-
-    fn security_arguments() -> Vec<String> {
-        let mut args = vec![];
-        args.push("--tls-cipher".to_owned());
-        args.push(ALLOWED_TLS_CIPHERS.join(":"));
-        args
-    }
-
-    fn remote_arguments(&self) -> Vec<String> {
-        let mut args: Vec<String> = vec![];
-        if let Some(ref endpoint) = self.remote {
-            args.push("--proto".to_owned());
-            args.push(match endpoint.protocol {
-                net::TransportProtocol::Udp => "udp".to_owned(),
-                net::TransportProtocol::Tcp => "tcp-client".to_owned(),
-            });
-            args.push("--remote".to_owned());
-            args.push(endpoint.address.ip().to_string());
-            args.push(endpoint.address.port().to_string());
-        }
-        args
-    }
-
-    fn authentication_arguments(&self) -> Vec<OsString> {
-        let mut args = vec![];
-        if let Some(ref user_pass_path) = self.user_pass_path {
-            args.push(OsString::from("--auth-user-pass"));
-            args.push(OsString::from(user_pass_path));
-        }
-        args
-    }
-
-    fn proxy_arguments(&self) -> Vec<String> {
-        let mut args = vec![];
-        match self.tunnel_options.proxy {
-            Some(net::openvpn::ProxySettings::Local(ref local_proxy)) => {
-                args.push("--socks-proxy".to_owned());
-                args.push("127.0.0.1".to_owned());
-                args.push(local_proxy.port.to_string());
-                args.push("--route".to_owned());
-                args.push(local_proxy.peer.ip().to_string());
-                args.push("255.255.255.255".to_owned());
-                args.push("net_gateway".to_owned());
-            }
-            Some(net::openvpn::ProxySettings::Remote(ref remote_proxy)) => {
-                args.push("--socks-proxy".to_owned());
-                args.push(remote_proxy.address.ip().to_string());
-                args.push(remote_proxy.address.port().to_string());
-
-                if let Some(ref _auth) = remote_proxy.auth {
-                    if let Some(ref auth_file) = self.proxy_auth_path {
-                        args.push(auth_file.to_string_lossy().to_string());
-                    } else {
-                        log::error!("Proxy credentials present but credentials file missing");
-                    }
-                }
-
-                args.push("--route".to_owned());
-                args.push(remote_proxy.address.ip().to_string());
-                args.push("255.255.255.255".to_owned());
-                args.push("net_gateway".to_owned());
-            }
-            Some(net::openvpn::ProxySettings::Shadowsocks(ref ss)) => {
-                args.push("--socks-proxy".to_owned());
-                args.push("127.0.0.1".to_owned());
-
-                if let Some(ref proxy_port) = self.proxy_port {
-                    args.push(proxy_port.to_string());
-                } else {
-                    panic!("Dynamic proxy port was not registered with OpenVpnCommand");
-                }
-
-                args.push("--route".to_owned());
-                args.push(ss.peer.ip().to_string());
-                args.push("255.255.255.255".to_owned());
-                args.push("net_gateway".to_owned());
-            }
-            None => {}
-        };
-        args
-    }
-}
-
-impl fmt::Display for OpenVpnCommand {
-    /// Format the program and arguments of an `OpenVpnCommand` for display. Any non-utf8 data
-    /// is lossily converted using the utf8 replacement character.
-    fn fmt(&self, fmt: &mut fmt::Formatter<'_>) -> fmt::Result {
-        fmt.write_str(&shell_escape::escape(self.openvpn_bin.to_string_lossy()))?;
-        for arg in &self.get_arguments() {
-            fmt.write_str(" ")?;
-            fmt.write_str(&shell_escape::escape(arg.to_string_lossy()))?;
-        }
+    pub fn start_tinc(&mut self) -> Result<()> {
+        let conf_tinc_home = "--config=".to_string() + &self.tinc_home;
+        let conf_pidfile = "--pidfile=".to_string() + &self.tinc_home + "/tinc.pid";
+        let argument: Vec<&str> = vec![
+            &conf_tinc_home,
+            &conf_pidfile,
+            "--no-detach",
+        ];
+        let tinc_handle: duct::Expression = duct::cmd(
+            OsString::from(self.tinc_home.to_string() + "/tincd"),
+            argument).unchecked();
+        self.tinc_handle = Some(
+            tinc_handle.stderr_null().stdout_null().start()
+                .map_err(|e| Error::StartTincError(e))?
+        );
         Ok(())
     }
-}
 
-/// Proc handle for an openvpn process
-pub struct OpenVpnProcHandle {
-    /// Duct handle
-    pub inner: duct::Handle,
-    /// Standard input handle
-    pub stdin: Mutex<Option<PipeWriter>>,
-}
+    pub fn stop_tinc(&mut self) -> Result<()> {
+        if let Some(child) = &self.tinc_handle {
+            child.kill().map_err(Error::StopTincError)?
+        }
+        self.tinc_handle = None;
+        Ok(())
+    }
 
-/// Impl for proc handle
-impl OpenVpnProcHandle {
-    /// Constructor for a new openvpn proc handle
-    pub fn new(mut cmd: duct::Expression) -> io::Result<Self> {
-        if !atty::is(atty::Stream::Stdout) {
-            cmd = cmd.stdout_null();
+    pub fn check_tinc_status(&mut self) -> Result<()> {
+        if let Some(child) = &self.tinc_handle {
+            let out = child.try_wait()
+                .map_err(Error::TincNotExist)?;
+
+            if let None = x {
+                return Ok(());
+            }
+        }
+        Err(Error::TincNotExist)
+    }
+
+    pub fn restart_tinc(&mut self) -> Result<()> {
+        if let Ok(_) = self.check_tinc_status() {
+            self.stop_tinc()?;
+        }
+        self.start_tinc()
+    }
+
+    /// 根据IP地址获取文件名
+    pub fn get_filename_by_ip(&self, ip: &str) -> String {
+        let splits = ip.split(".").collect::<Vec<&str>>();
+        let mut filename = String::new();
+        filename.push_str(splits[0]);
+        filename.push_str("_");
+        filename.push_str(splits[1]);
+        filename.push_str("_");
+        filename.push_str(splits[2]);
+        filename.push_str("_");
+        filename.push_str(splits[3]);
+        filename
+    }
+
+    /// 根据IP地址获取文件名
+    pub fn get_client_filename_by_virtual_ip(&self, virtual_ip: &str) -> String {
+        let splits = virtual_ip.split(".").collect::<Vec<&str>>();
+        let mut filename = String::new();
+        filename.push_str(splits[1]);
+        filename.push_str("_");
+        filename.push_str(splits[2]);
+        filename.push_str("_");
+        filename.push_str(splits[3]);
+        filename
+    }
+
+    /// 添加子设备
+    pub fn add_hosts(&self, host_name: &str, pub_key: &str) -> bool {
+        let mut file = fs::File::create(format!("{}/{}/{}", self.tinc_home.clone() , "hosts", host_name)).unwrap();
+        file.write_all(content.as_bytes()).unwrap();
+        drop(file);
+        true
+    }
+
+    /// 获取子设备公钥
+    pub fn get_host_pub_key(&self, host_name:&str) -> Result<String> {
+        let file_path =  &self.tinc_home.to_string() + "/hosts/" + host_name;
+        let mut file = fs::File::open(file_path)
+            .map_err(Error::FileNotExist(file_path))?;
+        let mut contents = String::new();
+        file.read_to_string(&mut contents)
+            .map_err(Error::FileNotExist(file_path))?;
+        Ok(contents)
+    }
+
+    #[cfg(unix)]
+    pub fn create_pub_key(&self) -> Result<()> {
+        let mut write_priv_key_ok = false;
+        if let Ok(key) = Rsa::generate(2048) {
+            if let Ok(priv_key) = key.private_key_to_pem() {
+                if let Ok(priv_key) = String::from_utf8(priv_key) {
+                    if let Ok(mut file) = fs::File::create(
+                        self.tinc_home.to_string() + "priv_key.pem") {
+                        file.write_all(priv_key.as_bytes())?;
+                        drop(file);
+
+                        write_priv_key_ok = true;
+                    }
+                }
+            }
+            if let Ok(pub_key) = key.public_key_to_pem() {
+                if let Ok(pub_key) = String::from_utf8(pub_key) {
+                    if let Ok(mut file) = fs::File::create(
+                        self.tinc_home.to_string() + "pub_key.pem") {
+                        file.write_all(pub_key.as_bytes())?;
+                        drop(file);
+                        if write_priv_key_ok {
+                            return Ok(());
+                        }
+                    }
+                }
+            }
+        }
+        Err(Error::CreatePubKeyError)
+    }
+
+    /// 从pub_key文件读取pub_key
+    pub fn get_pub_key(&self) -> Result<String> {
+        let file =  fs::File::open(self.tinc_home.clone() + &self.pub_key_path)
+            ;
+        file.read()
+    }
+
+    pub fn set_pub_key(&mut self, pub_key: &str) -> bool {
+        let file = File::new(self.tinc_home.clone() + &self.pub_key_path);
+        file.write(pub_key.to_string())
+    }
+
+    pub fn get_vip(&self) -> String {
+        let mut out = String::new();
+
+        let file = File::new(self.tinc_home.clone() + "tinc-up");
+        let res = file.read();
+        let res: Vec<&str> = res.split("vpngw=").collect();
+        if res.len() > 1 {
+            let res = res[1].to_string();
+            let res: Vec<&str> = res.split("\n").collect();
+            if res.len() > 1 {
+                out = res[0].to_string();
+            }
+        }
+        return out;
+    }
+
+    fn set_tinc_conf_file(&self, info: &Info) -> bool {
+        let name = "proxy".to_string() + "_"
+            + &self.get_filename_by_ip(&info.proxy_info.proxy_ip);
+
+        let mut connect_to: Vec<String> = vec![];
+        for online_proxy in info.proxy_info.online_porxy.clone() {
+            let online_proxy_name = "proxy".to_string() + "_"
+                + &self.get_filename_by_ip(&online_proxy.ip.to_string());
+            connect_to.push(online_proxy_name);
         }
 
-        if !atty::is(atty::Stream::Stderr) {
-            cmd = cmd.stderr_null();
+
+        let mut buf_connect_to = String::new();
+        for other in connect_to {
+            let buf = "ConnectTo = ".to_string() + &other + "\n\
+            ";
+            buf_connect_to += &buf;
+        }
+        let buf = "Name = ".to_string() + &name + "\n\
+        " + &buf_connect_to
+            + "DeviceType=tap\n\
+        Mode=switch\n\
+        Interface=tun0\n\
+        Device = /dev/net/tun\n\
+        BindToAddress = * 50069\n\
+        ProcessPriority = high\n\
+        PingTimeout=10";
+        let file = File::new(self.tinc_home.clone() + "/tinc.conf");
+        file.write(buf.to_string())
+    }
+
+    /// 检查info中的配置, 并与实际运行的tinc配置对比, 如果不同修改tinc配置,
+    /// 如果自己的vip修改,重启tinc
+    pub fn check_info(&mut self, info: &Info) -> bool {
+        let mut need_restart = false;
+        {
+            let file_vip = self.get_vip();
+            if file_vip != info.tinc_info.vip.to_string() {
+                debug!("tinc operator check_info local {}, remote {}",
+                       file_vip,
+                       info.tinc_info.vip.to_string());
+
+                if !self.change_vip(info.tinc_info.vip.to_string()) {
+                    return false;
+                }
+
+                if !self.set_hosts(true,
+                                   &info.proxy_info.proxy_ip.to_string(),
+                                   &info.tinc_info.pub_key,
+                ) {
+                    return false;
+                }
+
+                need_restart = true;
+            }
+        }
+        {
+            for online_proxy in info.proxy_info.online_porxy.clone() {
+                if !self.set_hosts(true,
+                                   &online_proxy.ip.to_string(),
+                                   &online_proxy.pubkey,
+                ) {
+                    return false;
+                }
+            }
         }
 
-        let (reader, writer) = pipe()?;
-        let proc_handle = cmd.stdin_handle(reader).start()?;
-
-        Ok(Self {
-            inner: proc_handle,
-            stdin: Mutex::new(Some(writer)),
-        })
-    }
-}
-
-impl StoppableProcess for OpenVpnProcHandle {
-    /// Closes STDIN to stop the openvpn process
-    fn stop(&self) {
-        // Dropping our stdin handle so that it is closed once. Closing the handle should
-        // gracefully stop our openvpn child process.
-        let _ = self.stdin.lock().take();
-    }
-
-    fn kill(&self) -> io::Result<()> {
-        self.inner.kill()
-    }
-
-    fn has_stopped(&self) -> io::Result<bool> {
-        match self.inner.try_wait() {
-            Ok(None) => Ok(false),
-            Ok(Some(_)) => Ok(true),
-            Err(e) => Err(e),
+        if self.check_self_hosts_file(self.tinc_home.borrow(), &info) {
+            self.set_hosts(
+                true,
+                &info.proxy_info.proxy_ip,
+                &info.tinc_info.pub_key);
         }
-    }
-}
 
-
-#[cfg(test)]
-mod tests {
-    use super::OpenVpnCommand;
-    use std::{ffi::OsString, net::Ipv4Addr};
-    use talpid_types::net::{Endpoint, TransportProtocol};
-
-    #[test]
-    fn passes_one_remote() {
-        let remote = Endpoint::new(Ipv4Addr::new(127, 0, 0, 1), 3333, TransportProtocol::Udp);
-
-        let testee_args = OpenVpnCommand::new("").remote(remote).get_arguments();
-
-        assert!(testee_args.contains(&OsString::from("udp")));
-        assert!(testee_args.contains(&OsString::from("127.0.0.1")));
-        assert!(testee_args.contains(&OsString::from("3333")));
+        if need_restart {
+            self.set_tinc_conf_file(&info);
+            self.restart_tinc();
+        }
+        return true;
     }
 
-    #[test]
-    fn passes_plugin_path() {
-        let path = "./a/path";
-        let testee_args = OpenVpnCommand::new("").plugin(path, vec![]).get_arguments();
-        assert!(testee_args.contains(&OsString::from("./a/path")));
+    fn set_hosts(&self,
+                 is_proxy: bool,
+                 ip: &str,
+                 pubkey: &str) -> bool {
+        {
+            let mut proxy_or_client = "proxy".to_string();
+            if !is_proxy {
+                proxy_or_client = "CLIENT".to_string();
+            }
+            let buf = "Address=".to_string()
+                + ip
+                + "\n\
+                "
+                + pubkey
+                + "Port=50069\n\
+                ";
+            let file_name = proxy_or_client.to_string()
+                + "_" + &self.get_filename_by_ip(ip);
+            let file = File::new(self.tinc_home.clone() + "/hosts/" + &file_name);
+            if !file.write(buf.to_string()) {
+                return false;
+            }
+        }
+        true
     }
 
-    #[test]
-    fn passes_plugin_args() {
-        let args = vec![String::from("123"), String::from("cde")];
-        let testee_args = OpenVpnCommand::new("").plugin("", args).get_arguments();
-        assert!(testee_args.contains(&OsString::from("123")));
-        assert!(testee_args.contains(&OsString::from("cde")));
+    /// 修改tinc虚拟ip
+    fn change_vip(&self, vip: String) -> bool {
+        let wan_name = match get_wan_name() {
+            Some(x) => x,
+            None => {
+                warn!("change_vip get dev wan failed, use defualt.");
+                "eth0".to_string()
+            }
+        };
+        {
+            let buf = "#! /bin/sh\n\
+            dev=tun0\n\
+            vpngw=".to_string() + &vip + "\n\
+            echo 1 > /proc/sys/net/ipv4/ip_forward\n\
+            ifconfig ${dev} ${vpngw} netmask 255.0.0.0\n\
+            iptables -t nat -F\n\
+            iptables -t nat -A POSTROUTING -s ${vpngw}/8 -o "
+                + &wan_name
+                + " -j MASQUERADE\n\
+            exit 0";
+            let file = File::new(self.tinc_home.clone() + "/tinc-up");
+            if !file.write(buf.to_string()) {
+                return false;
+            }
+        }
+        true
+    }
+
+    pub fn check_self_hosts_file(&self, tinc_home: &str, info: &Info) -> bool {
+        let ip = info.proxy_info.proxy_ip.clone();
+        let filename = self.get_filename_by_ip(&ip);
+        let file = File::new(
+            tinc_home.to_string()
+                + "/hosts/"
+                + "proxy_"
+                + &filename
+        );
+        file.file_exists()
+    }
+
+    pub fn write_auth_file(&self,
+                           server_url:  &str,
+                           info:        &Info,
+    ) -> bool {
+        let auth_dir = path::PathBuf::from(&(self.tinc_home.to_string() + TINC_AUTH_PATH));
+        if !path::Path::new(&auth_dir).is_dir() {
+            if let Err(_) = fs::create_dir_all(&auth_dir) {
+                return false;
+            }
+        }
+
+        let file_path_buf = auth_dir.join(TINC_AUTH_FILENAME);
+        let file_path = path::Path::new(&file_path_buf);
+
+        let permissions = PermissionsExt::from_mode(0o755);
+        if file_path.is_file() {
+            if let Ok(file) = fs::File::open(&file_path) {
+                if let Err(_) = file.set_permissions(permissions) {
+                    return false;
+                }
+            }
+            else {
+                return false;
+            }
+        }
+        else {
+            if let Ok(file) = fs::File::create(&file_path) {
+                if let Err(_) = file.set_permissions(permissions) {
+                    return false;
+                }
+            }
+            else {
+                return false;
+            }
+        }
+        if let Some(file_str) = file_path.to_str() {
+            let file = File::new(file_str.to_string());
+            let auth_info = AuthInfo::load(server_url, info);
+            file.write(auth_info.to_json_str());
+        }
+        else {
+            return false;
+        }
+        return true;
     }
 }

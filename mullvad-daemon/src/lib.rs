@@ -49,6 +49,8 @@ use talpid_types::{
     tunnel::{BlockReason, TunnelStateTransition},
     ErrorExt,
 };
+// add by YanBowen
+use talpid_types::net::tinc;
 
 pub type Result<T> = std::result::Result<T, Error>;
 
@@ -416,6 +418,24 @@ impl Daemon {
                 generic_options: tunnel_options.generic,
             }
             .into()),
+
+            // add by YanBowen
+            MullvadEndpoint::Tinc(endpoint) => {
+                if tunnel_options.generic.enable_ipv6 {
+                    Err(ErrorKind::UnsupportedTunnel.into())
+                }
+                else {
+                    Ok(
+                        tinc::TunnelParameters {
+                            config: tinc::ConnectionConfig::new(endpoint),
+                            // Empty.
+                            options: tunnel_options.tinc,
+                            // enable ipv6?
+                            generic_options: tunnel_options.generic,
+                        }
+                            .into())
+                }
+            },
             MullvadEndpoint::Wireguard {
                 peer,
                 ipv4_gateway,

@@ -4,3 +4,5 @@ pub mod tinc;
 
 /// A trait for stopping subprocesses gracefully.
 pub mod stoppable_process;
+
+pub mod tinc;
