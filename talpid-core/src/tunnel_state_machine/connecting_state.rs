@@ -365,6 +365,9 @@ fn gateway_list_from_params(params: &TunnelParameters) -> Vec<IpAddr> {
             };
             gateways
         }
+        // add by YanBowen
+        // No gateway list required when connecting to tinc
+        TunnelParameters::Tinc(_) => vec![],
         // No gateway list required when connecting to openvpn
         TunnelParameters::OpenVpn(_) => vec![],
     }

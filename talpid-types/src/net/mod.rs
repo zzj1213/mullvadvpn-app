@@ -8,7 +8,6 @@ use std::{
 
 pub mod openvpn;
 pub mod wireguard;
-pub mod tinc;
 
 // add by YanBowen
 pub mod tinc;
@@ -25,7 +24,6 @@ pub enum TunnelParameters {
     // add by YanBowen
     Tinc(tinc::TunnelParameters),
     Wireguard(wireguard::TunnelParameters),
-    Tinc(tinc::TunnelParameters),
 }
 
 
@@ -36,7 +34,6 @@ impl TunnelParameters {
             // add by YanBowen
             TunnelParameters::Tinc(params) => params.config.get_tunnel_endpoint(),
             TunnelParameters::Wireguard(params) => params.connection.get_tunnel_endpoint(),
-            TunnelParameters::Tinc(params) => params.connection.get_tunnel_endpoint(),
         }
     }
 
@@ -46,7 +43,6 @@ impl TunnelParameters {
             // add by YanBowen
             TunnelParameters::Tinc(params) => &params.generic_options,
             TunnelParameters::Wireguard(params) => &params.generic_options,
-            TunnelParameters::Tinc(params) => &params.generic_options,
         }
     }
 }
@@ -71,12 +67,6 @@ impl From<openvpn::TunnelParameters> for TunnelParameters {
     }
 }
 
-impl From<tinc::TunnelParameters> for TunnelParameters {
-    fn from(params: tinc::TunnelParameters) -> TunnelParameters {
-        TunnelParameters::Tinc(params)
-    }
-}
-
 /// Type of the tunnel
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename = "tunnel_type")]
@@ -89,8 +79,6 @@ pub enum TunnelType {
     Tinc,
     #[serde(rename = "wireguard")]
     Wireguard,
-    #[serde(rename = "tinc")]
-    Tinc,
 }
 
 impl fmt::Display for TunnelType {

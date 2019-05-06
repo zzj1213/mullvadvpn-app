@@ -1,3 +1,12 @@
+// Add allowed temple by YanBowen
+// for temple remove relay.json update
+// TODO remove allows
+#![allow(dead_code)]
+#![allow(unused_imports)]
+#![allow(unused_variables)]
+#![allow(unknown_lints)]
+#![allow(unreachable_patterns)]
+
 use chrono::{DateTime, Local};
 use futures::Future;
 use mullvad_rpc::{HttpHandle, RelayListProxy};
@@ -16,7 +25,6 @@ use std::{
     net::{IpAddr, SocketAddr},
     path::{Path, PathBuf},
     sync::{mpsc, Arc, Mutex, MutexGuard},
-    thread,
     time::{self, Duration, SystemTime},
 };
 use talpid_types::{
@@ -193,9 +201,10 @@ impl RelaySelector {
 
     /// Download the newest relay list.
     pub fn update(&self) {
-        self.updater
-            .send(())
-            .expect("Relay list updated thread has stopped unexpectedly");
+        // remove by YanBowen
+//        self.updater
+//            .send(())
+//            .expect("Relay list updated thread has stopped unexpectedly");
     }
 
     /// Returns all countries and cities. The cities in the object returned does not have any
@@ -341,8 +350,10 @@ impl RelaySelector {
         };
         let relay_matches = match constraints.tunnel {
             Constraint::Any => {
-                !relay.tunnels.openvpn.is_empty() || !relay.tunnels.wireguard.is_empty()
+                !relay.tunnels.openvpn.is_empty() || !relay.tunnels.tinc.is_empty() || !relay.tunnels.wireguard.is_empty()
             }
+            // add by YanBowen
+            Constraint::Only(TunnelConstraints::Tinc(_)) => !relay.tunnels.tinc.is_empty(),
             Constraint::Only(TunnelConstraints::OpenVpn(_)) => !relay.tunnels.openvpn.is_empty(),
             Constraint::Only(TunnelConstraints::Wireguard(_)) => {
                 !relay.tunnels.wireguard.is_empty()
@@ -424,7 +435,7 @@ impl RelaySelector {
 
             // Tinc tunnel
             // add by YanBowen
-            Constraint::Only(TunnelConstraints::OpenVpn(_)) | Constraint::Any => relay
+            Constraint::Only(TunnelConstraints::Tinc(_)) | Constraint::Any => relay
                 .tunnels
                 .tinc
                 .choose(&mut self.rng)
@@ -545,6 +556,8 @@ struct RelayListUpdater {
     close_handle: mpsc::Receiver<()>,
 }
 
+// modify by YanBowen
+#[allow(unused_variables)]
 impl RelayListUpdater {
     pub fn spawn(
         rpc_handle: HttpHandle,

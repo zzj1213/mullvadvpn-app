@@ -1,48 +1,77 @@
+#![allow(dead_code)]
+
 use std::path;
 use std::fs;
 use std::io::{self, Write, Read};
 use std::ffi::OsString;
 #[cfg(unix)]
 use std::os::unix::fs::PermissionsExt;
+use std::net::IpAddr;
+use std::str::FromStr;
 
+use openssl::rsa::Rsa;
+
+use talpid_types::net::tinc::domain::{Info, AuthInfo, TincInfo};
+use talpid_types::net::tinc::net_tool;
+
+/// Results from fallible operations on the Tinc tunnel.
 pub type Result<T> = std::result::Result<T, Error>;
 
+/// Errors that can happen when using the Tinc tunnel.
 #[derive(err_derive::Error, Debug)]
 pub enum Error {
+    /// Unable to start
     #[error(display = "duct can not start tinc")]
     StartTincError,
 
+    /// Unable to stop
     #[error(display = "duct can not stop tinc")]
     StopTincError,
 
+    /// tinc process not exist
     #[error(display = "tinc process not exist")]
     TincNotExist,
 
+    /// tinc host file not exist
     #[error(display = "tinc host file not exist")]
     FileNotExist(String),
 
-    #[error(display = "tinc can't create key pair")]
+    /// Failed create file
+    #[error(display = "Failed create file")]
+    FileCreateError(String),
+
+    /// Tinc can't create key pair
+    #[error(display = "Tinc can't create key pair")]
     CreatePubKeyError,
+
+    /// Invalid tinc info
+    #[error(display = "Invalid tinc info")]
+    TincInfoError,
+
+    /// Io error
+    #[error(display = "Io error")]
+    IoError(#[error(cause)] io::Error)
 }
 const TINC_AUTH_PATH: &str = "auth/";
 const TINC_AUTH_FILENAME: &str = "auth.txt";
 
-pub struct TincCommand {
-    tinc_home:          String,
-    pub_key_path:       String,
-    tinc_handle:        Option<duct::Handle>,
+/// Tinc operator
+pub struct TincOperator {
+    tinc_home:              String,
+    pub_key_path:           String,
 }
-impl TincCommand {
+impl TincOperator {
+    /// 获取tinc home dir 创建tinc操作。
     pub fn new(tinc_home: String) -> Self {
         let pub_key_path = tinc_home.clone() + "/key/rsa_key.pub";
-        TincCommand {
+        TincOperator {
             tinc_home,
             pub_key_path,
-            tinc_handle: None,
         }
     }
 
-    pub fn start_tinc(&mut self) -> Result<()> {
+    /// 启动tinc 返回duct::handle
+    pub fn start_tinc(&mut self) -> Result<duct::Handle> {
         let conf_tinc_home = "--config=".to_string() + &self.tinc_home;
         let conf_pidfile = "--pidfile=".to_string() + &self.tinc_home + "/tinc.pid";
         let argument: Vec<&str> = vec![
@@ -53,39 +82,39 @@ impl TincCommand {
         let tinc_handle: duct::Expression = duct::cmd(
             OsString::from(self.tinc_home.to_string() + "/tincd"),
             argument).unchecked();
-        self.tinc_handle = Some(
-            tinc_handle.stderr_null().stdout_null().start()
-                .map_err(|e| Error::StartTincError(e))?
-        );
-        Ok(())
+        tinc_handle.stderr_null().stdout_null().start()
+            .map_err(|e| {
+                log::error!("{:?}", e.to_string());
+                Error::StartTincError
+            })
     }
 
-    pub fn stop_tinc(&mut self) -> Result<()> {
-        if let Some(child) = &self.tinc_handle {
-            child.kill().map_err(Error::StopTincError)?
-        }
-        self.tinc_handle = None;
-        Ok(())
-    }
-
-    pub fn check_tinc_status(&mut self) -> Result<()> {
-        if let Some(child) = &self.tinc_handle {
-            let out = child.try_wait()
-                .map_err(Error::TincNotExist)?;
-
-            if let None = x {
-                return Ok(());
-            }
-        }
-        Err(Error::TincNotExist)
-    }
-
-    pub fn restart_tinc(&mut self) -> Result<()> {
-        if let Ok(_) = self.check_tinc_status() {
-            self.stop_tinc()?;
-        }
-        self.start_tinc()
-    }
+//    pub fn stop_tinc(&mut self) -> Result<()> {
+//        if let Some(child) = &self.tinc_handle {
+//            child.kill().map_err(|_|Error::StopTincError)?
+//        }
+//        self.tinc_handle = None;
+//        Ok(())
+//    }
+//
+//    pub fn check_tinc_status(&mut self) -> Result<()> {
+//        if let Some(child) = &self.tinc_handle {
+//            let out = child.try_wait()
+//                .map_err(|_|Error::TincNotExist)?;
+//
+//            if let None = out {
+//                return Ok(());
+//            }
+//        }
+//        Err(Error::TincNotExist)
+//    }
+//
+//    pub fn restart_tinc(&mut self) -> Result<()> {
+//        if let Ok(_) = self.check_tinc_status() {
+//            self.stop_tinc()?;
+//        }
+//        self.start_tinc()
+//    }
 
     /// 根据IP地址获取文件名
     pub fn get_filename_by_ip(&self, ip: &str) -> String {
@@ -114,48 +143,54 @@ impl TincCommand {
     }
 
     /// 添加子设备
-    pub fn add_hosts(&self, host_name: &str, pub_key: &str) -> bool {
-        let mut file = fs::File::create(format!("{}/{}/{}", self.tinc_home.clone() , "hosts", host_name)).unwrap();
-        file.write_all(content.as_bytes()).unwrap();
+    pub fn add_hosts(&self, host_name: &str, pub_key: &str) -> Result<()> {
+        let mut file = fs::File::create(
+            format!("{}/{}/{}", self.tinc_home.clone() , "hosts", host_name))
+            .map_err(|e|Error::FileCreateError(e.to_string()))?;
+        file.write_all(pub_key.as_bytes())
+            .map_err(|e|Error::FileCreateError(e.to_string()))?;
         drop(file);
-        true
+        Ok(())
     }
 
     /// 获取子设备公钥
     pub fn get_host_pub_key(&self, host_name:&str) -> Result<String> {
-        let file_path =  &self.tinc_home.to_string() + "/hosts/" + host_name;
+        let file_path =  &(self.tinc_home.to_string() + "/hosts/" + host_name);
         let mut file = fs::File::open(file_path)
-            .map_err(Error::FileNotExist(file_path))?;
+            .map_err(|_|Error::FileNotExist(file_path.to_string()))?;
         let mut contents = String::new();
         file.read_to_string(&mut contents)
-            .map_err(Error::FileNotExist(file_path))?;
+            .map_err(|_|Error::FileNotExist(file_path.to_string()))?;
         Ok(contents)
     }
 
+    /// openssl Rsa 创建2048位密钥对, 并存放到tinc配置文件中
     #[cfg(unix)]
     pub fn create_pub_key(&self) -> Result<()> {
         let mut write_priv_key_ok = false;
         if let Ok(key) = Rsa::generate(2048) {
             if let Ok(priv_key) = key.private_key_to_pem() {
                 if let Ok(priv_key) = String::from_utf8(priv_key) {
-                    if let Ok(mut file) = fs::File::create(
-                        self.tinc_home.to_string() + "priv_key.pem") {
-                        file.write_all(priv_key.as_bytes())?;
-                        drop(file);
+                    let mut file = fs::File::create(
+                        self.tinc_home.to_string() + "priv_key.pem")
+                        .map_err(|e|Error::FileCreateError(e.to_string()))?;
+                    file.write_all(priv_key.as_bytes())
+                        .map_err(|_|Error::CreatePubKeyError)?;
+                    drop(file);
 
-                        write_priv_key_ok = true;
-                    }
+                    write_priv_key_ok = true;
                 }
             }
             if let Ok(pub_key) = key.public_key_to_pem() {
                 if let Ok(pub_key) = String::from_utf8(pub_key) {
-                    if let Ok(mut file) = fs::File::create(
-                        self.tinc_home.to_string() + "pub_key.pem") {
-                        file.write_all(pub_key.as_bytes())?;
-                        drop(file);
-                        if write_priv_key_ok {
-                            return Ok(());
-                        }
+                    let mut file = fs::File::create(
+                        self.tinc_home.to_string() + "pub_key.pem")
+                        .map_err(|e|Error::FileCreateError(e.to_string()))?;
+                    file.write_all(pub_key.as_bytes())
+                        .map_err(|_|Error::CreatePubKeyError)?;
+                    drop(file);
+                    if write_priv_key_ok {
+                        return Ok(());
                     }
                 }
             }
@@ -165,21 +200,32 @@ impl TincCommand {
 
     /// 从pub_key文件读取pub_key
     pub fn get_pub_key(&self) -> Result<String> {
-        let file =  fs::File::open(self.tinc_home.clone() + &self.pub_key_path)
-            ;
-        file.read()
+        let mut file =  fs::File::open(self.tinc_home.clone() + &self.pub_key_path)
+            .map_err(|e|Error::FileNotExist(e.to_string()))?;
+        let buf = &mut [0; 2048];
+        file.read(buf)
+            .map_err(|e|Error::FileNotExist(e.to_string()))?;
+        Ok(String::from_utf8_lossy(buf).to_string())
     }
 
-    pub fn set_pub_key(&mut self, pub_key: &str) -> bool {
-        let file = File::new(self.tinc_home.clone() + &self.pub_key_path);
-        file.write(pub_key.to_string())
+    /// 修改本地公钥
+    pub fn set_pub_key(&mut self, pub_key: &str) -> Result<()> {
+        let mut file = fs::File::create(self.tinc_home.clone() + &self.pub_key_path)
+            .map_err(|_|Error::CreatePubKeyError)?;
+        file.write(pub_key.as_bytes())
+            .map_err(|e|Error::FileNotExist(e.to_string()))?;
+        return Ok(());
     }
 
-    pub fn get_vip(&self) -> String {
+    /// 获取本地tinc虚拟ip
+    pub fn get_vip(&self) -> Result<String> {
         let mut out = String::new();
 
-        let file = File::new(self.tinc_home.clone() + "tinc-up");
-        let res = file.read();
+        let mut file = fs::File::create(self.tinc_home.clone() + "tinc-up")
+            .map_err(|e|Error::FileCreateError(e.to_string()))?;
+        let res = &mut [0; 1024];
+        file.read(res).map_err(Error::IoError)?;
+        let res = String::from_utf8_lossy(res);
         let res: Vec<&str> = res.split("vpngw=").collect();
         if res.len() > 1 {
             let res = res[1].to_string();
@@ -188,10 +234,11 @@ impl TincCommand {
                 out = res[0].to_string();
             }
         }
-        return out;
+        return Ok(out);
     }
 
-    fn set_tinc_conf_file(&self, info: &Info) -> bool {
+    /// 通过Info修改tinc.conf
+    fn set_tinc_conf_file(&self, info: &Info) -> Result<()> {
         let name = "proxy".to_string() + "_"
             + &self.get_filename_by_ip(&info.proxy_info.proxy_ip);
 
@@ -209,7 +256,7 @@ impl TincCommand {
             ";
             buf_connect_to += &buf;
         }
-        let buf = "Name = ".to_string() + &name + "\n\
+        let buf :String = "Name = ".to_string() + &name + "\n\
         " + &buf_connect_to
             + "DeviceType=tap\n\
         Mode=switch\n\
@@ -218,64 +265,61 @@ impl TincCommand {
         BindToAddress = * 50069\n\
         ProcessPriority = high\n\
         PingTimeout=10";
-        let file = File::new(self.tinc_home.clone() + "/tinc.conf");
-        file.write(buf.to_string())
+        let mut file = fs::File::create(self.tinc_home.clone() + "/tinc.conf")
+            .map_err(|e|Error::FileCreateError(e.to_string()))?;
+        file.write(buf.as_bytes())
+            .map_err(|e|Error::FileNotExist(e.to_string()))?;
+        return Ok(());
     }
 
     /// 检查info中的配置, 并与实际运行的tinc配置对比, 如果不同修改tinc配置,
     /// 如果自己的vip修改,重启tinc
-    pub fn check_info(&mut self, info: &Info) -> bool {
-        let mut need_restart = false;
-        {
-            let file_vip = self.get_vip();
-            if file_vip != info.tinc_info.vip.to_string() {
-                debug!("tinc operator check_info local {}, remote {}",
-                       file_vip,
-                       info.tinc_info.vip.to_string());
+//    pub fn check_info(&mut self, info: &Info) -> Result<()> {
+//        let mut need_restart = false;
+//        {
+//            let file_vip = self.get_vip()?;
+//            if file_vip != info.tinc_info.vip.to_string() {
+//                log::debug!("tinc operator check_info local {}, remote {}",
+//                       file_vip,
+//                       info.tinc_info.vip.to_string());
+//
+//                self.change_vip(info.tinc_info.vip.to_string())?;
+//
+//                self.set_hosts(true,
+//                                   &info.proxy_info.proxy_ip.to_string(),
+//                                   &info.tinc_info.pub_key)?;
+//
+//                need_restart = true;
+//            }
+//        }
+//        {
+//            for online_proxy in info.proxy_info.online_porxy.clone() {
+//                self.set_hosts(true,
+//                                   &online_proxy.ip.to_string(),
+//                                   &online_proxy.pubkey)?;
+//            }
+//        }
+//
+//        self.check_self_hosts_file(&self.tinc_home, &info)?;
+//        self.set_hosts(
+//            true,
+//            &info.proxy_info.proxy_ip,
+//            &info.tinc_info.pub_key)?;
+//
+//        if need_restart {
+//            self.set_tinc_conf_file(&info)?;
+//            self.restart_tinc()?;
+//        }
+//        return Ok(());
+//    }
 
-                if !self.change_vip(info.tinc_info.vip.to_string()) {
-                    return false;
-                }
-
-                if !self.set_hosts(true,
-                                   &info.proxy_info.proxy_ip.to_string(),
-                                   &info.tinc_info.pub_key,
-                ) {
-                    return false;
-                }
-
-                need_restart = true;
-            }
-        }
-        {
-            for online_proxy in info.proxy_info.online_porxy.clone() {
-                if !self.set_hosts(true,
-                                   &online_proxy.ip.to_string(),
-                                   &online_proxy.pubkey,
-                ) {
-                    return false;
-                }
-            }
-        }
-
-        if self.check_self_hosts_file(self.tinc_home.borrow(), &info) {
-            self.set_hosts(
-                true,
-                &info.proxy_info.proxy_ip,
-                &info.tinc_info.pub_key);
-        }
-
-        if need_restart {
-            self.set_tinc_conf_file(&info);
-            self.restart_tinc();
-        }
-        return true;
-    }
-
+    /// 添加hosts文件
+    /// if is_proxy{ 文件名=proxy_10_253_x_x }
+    /// else { 文件名=虚拟ip后三位b_c_d }
     fn set_hosts(&self,
                  is_proxy: bool,
                  ip: &str,
-                 pubkey: &str) -> bool {
+                 pubkey: &str) -> Result<()> {
         {
             let mut proxy_or_client = "proxy".to_string();
             if !is_proxy {
@@ -290,20 +334,20 @@ impl TincCommand {
                 ";
             let file_name = proxy_or_client.to_string()
                 + "_" + &self.get_filename_by_ip(ip);
-            let file = File::new(self.tinc_home.clone() + "/hosts/" + &file_name);
-            if !file.write(buf.to_string()) {
-                return false;
-            }
+            let mut file = fs::File::create(self.tinc_home.clone() + "/hosts/" + &file_name)
+                .map_err(|e|Error::FileCreateError(e.to_string()))?;
+            file.write(buf.as_bytes())
+                .map_err(|e|Error::FileNotExist(e.to_string()))?;
         }
-        true
+        Ok(())
     }
 
     /// 修改tinc虚拟ip
-    fn change_vip(&self, vip: String) -> bool {
-        let wan_name = match get_wan_name() {
+    fn change_vip(&self, vip: String) -> Result<()> {
+        let wan_name = match net_tool::get_wan_name() {
             Some(x) => x,
             None => {
-                warn!("change_vip get dev wan failed, use defualt.");
+                log::warn!("change_vip get dev wan failed, use defualt.");
                 "eth0".to_string()
             }
         };
@@ -318,69 +362,87 @@ impl TincCommand {
                 + &wan_name
                 + " -j MASQUERADE\n\
             exit 0";
-            let file = File::new(self.tinc_home.clone() + "/tinc-up");
-            if !file.write(buf.to_string()) {
-                return false;
-            }
+            let mut file = fs::File::create(self.tinc_home.clone() + "/tinc-up")
+                .map_err(|e|Error::FileCreateError(e.to_string()))?;
+            file.write(buf.as_bytes())
+                .map_err(|e|Error::FileNotExist(e.to_string()))?;
         }
-        true
+        Ok(())
     }
 
-    pub fn check_self_hosts_file(&self, tinc_home: &str, info: &Info) -> bool {
+    /// 检测自身hosts文件,是否正确
+    pub fn check_self_hosts_file(&self, tinc_home: &str, info: &Info) -> Result<()> {
         let ip = info.proxy_info.proxy_ip.clone();
         let filename = self.get_filename_by_ip(&ip);
-        let file = File::new(
+        fs::File::open(
             tinc_home.to_string()
                 + "/hosts/"
                 + "proxy_"
                 + &filename
-        );
-        file.file_exists()
+        ).map_err(|e|Error::FileNotExist(e.to_string()))?;
+        Ok(())
     }
 
+    /// 写TINC_AUTH_PATH/TINC_AUTH_FILENAME(auth/auth.txt),用于tinc reporter C程序
+    /// TODO 去除C上报tinc上线信息流程,以及去掉auth/auth.txt.
     pub fn write_auth_file(&self,
                            server_url:  &str,
                            info:        &Info,
-    ) -> bool {
+    ) -> Result<()> {
         let auth_dir = path::PathBuf::from(&(self.tinc_home.to_string() + TINC_AUTH_PATH));
         if !path::Path::new(&auth_dir).is_dir() {
-            if let Err(_) = fs::create_dir_all(&auth_dir) {
-                return false;
-            }
+            fs::create_dir_all(&auth_dir)
+                .map_err(|e|Error::FileNotExist(e.to_string()))?;
         }
 
         let file_path_buf = auth_dir.join(TINC_AUTH_FILENAME);
         let file_path = path::Path::new(&file_path_buf);
 
+        #[cfg(unix)]
         let permissions = PermissionsExt::from_mode(0o755);
         if file_path.is_file() {
             if let Ok(file) = fs::File::open(&file_path) {
                 if let Err(_) = file.set_permissions(permissions) {
-                    return false;
+                    ()
                 }
-            }
-            else {
-                return false;
             }
         }
         else {
-            if let Ok(file) = fs::File::create(&file_path) {
-                if let Err(_) = file.set_permissions(permissions) {
-                    return false;
-                }
-            }
-            else {
-                return false;
-            }
+            let file = fs::File::create(&file_path)
+                .map_err(|e|Error::FileCreateError(e.to_string()))?;
+            let _ = file.set_permissions(permissions);
+
         }
         if let Some(file_str) = file_path.to_str() {
-            let file = File::new(file_str.to_string());
+            let mut file = fs::File::open(file_str.to_string())
+                .map_err(|e|Error::FileNotExist(e.to_string()))?;
             let auth_info = AuthInfo::load(server_url, info);
-            file.write(auth_info.to_json_str());
+            file.write(auth_info.to_json_str().as_bytes())
+                .map_err(|e|Error::FileNotExist(e.to_string()))?;
         }
-        else {
-            return false;
+
+        return Ok(());
+    }
+
+    /// Load local tinc config file vpnserver for tinc vip and pub_key.
+    /// Success return true.
+    pub fn load_local(&mut self, tinc_home: &str, pub_key_path: &str) -> io::Result<TincInfo> {
+        let mut tinc_info = TincInfo::new();
+        {
+            let mut res = String::new();
+            let mut _file = fs::File::open(tinc_home.to_string() + pub_key_path)?;
+            _file.read_to_string(&mut res)?;
+            tinc_info.pub_key = res.clone();
         }
-        return true;
+        {
+            if let Ok(vip_str) = self.get_vip() {
+                if let Ok(vip) = IpAddr::from_str(&vip_str) {
+                    tinc_info.vip = vip;
+                    return Ok(tinc_info);
+                }
+
+            }
+        }
+        return Err(io::Error::new(io::ErrorKind::InvalidData, "tinc config file error"));
     }
 }

@@ -1,10 +1,12 @@
 use crate::net::{Endpoint, GenericTunnelOptions, TransportProtocol, TunnelEndpoint, TunnelType};
 use serde::{Deserialize, Serialize};
 use std::net::SocketAddr;
-mod info;
-mod net_tool;
-mod sys_tool;
-use self::info::{TincInfo, ProxyInfo};
+
+pub mod domain;
+pub use self::domain::{Info, TincInfo, ProxyInfo, GeoInfo};
+
+pub mod net_tool;
+pub mod sys_tool;
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize)]
 pub struct TunnelParameters {
@@ -14,7 +16,7 @@ pub struct TunnelParameters {
     // pub enable_ipv6: bool,
     pub generic_options: GenericTunnelOptions,
 }
-//
+
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize)]
 pub struct ConnectionConfig {
     pub endpoint:       Endpoint,
@@ -22,7 +24,7 @@ pub struct ConnectionConfig {
 //    pub this_node:      TincNode,
 //    pub connect_to:     Vec<TincNode>,
 }
-//
+
 impl ConnectionConfig {
     pub fn new(endpoint: Endpoint) -> ConnectionConfig {
         Self {

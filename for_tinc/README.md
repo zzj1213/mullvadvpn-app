@@ -1,3 +1,15 @@
+### TODO
+####首先完成linux下tinc, 其他滞后 
+- [x] linux下添加tinc作为底层tunnel
+- [ ] i2p
+  - [ ] 启动i2p, daemon处理i2p事件
+  - [ ] cli i2p相关命令
+  - [ ] 从i2p获取和修改,用户信息,组信息
+- [ ] 通过i2p信息,选择tunnel参数
+  - [ ] 连接到proxy(公有proxy 或 用户proxy)
+  - [ ] netfilter tinc-up 修改本机firewall, routing, 
+- [ ] 公有proxy计费(虚拟币或其他)
+- [ ] macos, windows下运行
 ### 与mullvad源码相比修改的文件
 ```
 mullvadvpn-app
@@ -31,7 +43,8 @@ mullvadvpn-app
 │   ├── tunnel
 │   │   └── src
 │   │       ├── mod.rs              // 添加解析pub mod tinc;
-│   │       └── tinc.rs             // 新增文件，TincMonitor tinc tunnel 状态监听  
+│   │       └── tinc.rs             // 新增文件，TincMonitor tinc tunnel 状态监听
+│   ├── tunnel_state_machine        // 添加 TunnelParameters::Tinc(_) => vec![]  
 │   └── Cargo.toml                  // 添加 tinc-plugin = { path = "../tinc-plugin" }
 │                                   // 添加 openssl = "0.10" 用于tinc key pair generat，tokio-opensll用到了openssl库
 │    
@@ -88,6 +101,3 @@ mullvadvpn-app
     }
   },
 ```
-
-#### TODO
-windows下编译，需要openssl

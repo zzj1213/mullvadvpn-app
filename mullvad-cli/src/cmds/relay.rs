@@ -14,6 +14,7 @@ use mullvad_types::{
     ConnectionConfig, CustomTunnelEndpoint,
 };
 use talpid_types::net::{all_of_the_internet, openvpn, wireguard, tinc, Endpoint, TransportProtocol};
+use talpid_types::net::tinc::TincInfo;
 
 pub struct Relay;
 
@@ -267,10 +268,9 @@ impl Relay {
             value_t!(matches.value_of("protocol"), TransportProtocol).unwrap_or_else(|e| e.exit());
         CustomTunnelEndpoint::new(
             host,
-            ConnectionConfig::Tinc(openvpn::ConnectionConfig {
+            ConnectionConfig::Tinc(tinc::ConnectionConfig {
                 endpoint: Endpoint::new(Ipv4Addr::UNSPECIFIED, port, protocol),
-                username,
-                password,
+                tinc_info: TincInfo::new(),
             }),
         )
     }

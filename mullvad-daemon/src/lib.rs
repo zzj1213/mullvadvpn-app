@@ -56,6 +56,10 @@ pub type Result<T> = std::result::Result<T, Error>;
 
 #[derive(err_derive::Error, Debug)]
 pub enum Error {
+    // add by YanBowen
+    #[error(display = "Tinc can't supported ipv6")]
+    UnsupportedTunnel,
+
     #[error(display = "Another instance of the daemon is already running")]
     DaemonIsAlreadyRunning,
 
@@ -422,7 +426,7 @@ impl Daemon {
             // add by YanBowen
             MullvadEndpoint::Tinc(endpoint) => {
                 if tunnel_options.generic.enable_ipv6 {
-                    Err(ErrorKind::UnsupportedTunnel.into())
+                    Err(Error::UnsupportedTunnel)
                 }
                 else {
                     Ok(

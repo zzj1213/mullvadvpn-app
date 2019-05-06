@@ -16,6 +16,7 @@ use talpid_types::net::{tinc as tinc_types};
 pub mod openvpn;
 
 // add by YanBowen
+/// A module for all Tinc related tunnel management.
 pub mod tinc;
 
 #[cfg(any(target_os = "linux", target_os = "macos"))]
@@ -310,6 +311,8 @@ impl TunnelMonitor {
 pub enum CloseHandle {
     /// OpenVpn close handle
     OpenVpn(openvpn::OpenVpnCloseHandle),
+    // add by YanBowen
+    /// Tinc close handle
     Tinc(tinc::TincCloseHandle),
     #[cfg(any(target_os = "linux", target_os = "macos"))]
     /// Wireguard close handle

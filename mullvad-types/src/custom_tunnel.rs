@@ -74,6 +74,14 @@ impl fmt::Display for CustomTunnelEndpoint {
                 config.endpoint.address.port(),
                 config.endpoint.protocol
             ),
+            // add by YanBowen
+            ConnectionConfig::Tinc(config) => write!(
+                f,
+                "Tinc relay - {}:{} {}",
+                self.host,
+                config.endpoint.address.port(),
+                config.endpoint.protocol
+            ),
             ConnectionConfig::Wireguard(connection) => write!(
                 f,
                 "WireGuard relay - {} with public key {}",
@@ -108,6 +116,9 @@ fn resolve_to_ip(host: &str) -> Result<IpAddr, Error> {
 pub enum ConnectionConfig {
     #[serde(rename = "openvpn")]
     OpenVpn(openvpn::ConnectionConfig),
+    // add by YanBowen
+    #[serde(rename = "tinc")]
+    Tinc(tinc::ConnectionConfig),
     #[serde(rename = "wireguard")]
     Wireguard(wireguard::ConnectionConfig),
 }
@@ -116,6 +127,9 @@ impl ConnectionConfig {
     fn set_ip(&mut self, ip: IpAddr) {
         match self {
             ConnectionConfig::OpenVpn(config) => {
+                config.endpoint.address = SocketAddr::new(ip, config.endpoint.address.port());
+            }
+            ConnectionConfig::Tinc(config) => {
                 config.endpoint.address = SocketAddr::new(ip, config.endpoint.address.port());
             }
             ConnectionConfig::Wireguard(config) => {
