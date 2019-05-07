@@ -6,7 +6,6 @@ pub mod domain;
 pub use self::domain::{Info, TincInfo, ProxyInfo, GeoInfo};
 
 pub mod net_tool;
-pub mod sys_tool;
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize)]
 pub struct TunnelParameters {

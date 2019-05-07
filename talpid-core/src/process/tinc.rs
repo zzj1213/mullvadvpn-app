@@ -48,9 +48,17 @@ pub enum Error {
     #[error(display = "Invalid tinc info")]
     TincInfoError,
 
+    /// Error while running "ip route".
+    #[error(display = "Error while running \"ip route\"")]
+    FailedToRunIp(#[error(cause)] io::Error),
+
     /// Io error
     #[error(display = "Io error")]
-    IoError(#[error(cause)] io::Error)
+    IoError(#[error(cause)] io::Error),
+
+    /// No wan dev
+    #[error(display = "No wan dev")]
+    NoWanDev,
 }
 const TINC_AUTH_PATH: &str = "auth/";
 const TINC_AUTH_FILENAME: &str = "auth.txt";
@@ -345,8 +353,8 @@ impl TincOperator {
     /// 修改tinc虚拟ip
     fn change_vip(&self, vip: String) -> Result<()> {
         let wan_name = match net_tool::get_wan_name() {
-            Some(x) => x,
-            None => {
+            Ok(x) => x,
+            Err(_) => {
                 log::warn!("change_vip get dev wan failed, use defualt.");
                 "eth0".to_string()
             }
@@ -444,5 +452,20 @@ impl TincOperator {
             }
         }
         return Err(io::Error::new(io::ErrorKind::InvalidData, "tinc config file error"));
+    }
+}
+
+/// 获取出口网卡, 网卡名
+pub fn get_wan_name() -> Result<String> {
+    let output = duct::cmd(OsString::from("/bin/ip"),
+                           vec!(OsString::from("route")))
+        .read()
+        .map_err(|e|Error::FailedToRunIp(e))?;
+    match output
+        .lines()
+        .find(|line|line.trim().starts_with("default via "))
+        .and_then(|line| line.trim().split_whitespace().nth(4)) {
+        Some(dev) => Ok(dev.to_string()),
+        None => Err(Error::NoWanDev)
     }
 }
