@@ -22,8 +22,11 @@ api_root_ca.pem
 ca.crt
 tincd
 上级目录下
-relay.json.tinc_example   重命名为relay.json
-settings.json.tinc_example   重命名为settings.json
+relays.json.tinc_example   重命名为relays.json
 拷贝到mullvad-daemon运行目录.比如target/debug/
+
+settings.json.tinc_example   重命名为settings.json
+拷贝到/etc/mullvad-vpn
+
 运行mullvad-daemon, 通过mullvad 命令行控制mullvad-daemon
 ```

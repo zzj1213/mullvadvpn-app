@@ -1,5 +1,5 @@
 // Add allowed temple by YanBowen
-// for temple remove relay.json update
+// for temple remove relays.json update
 // TODO remove allows
 #![allow(dead_code)]
 #![allow(unused_imports)]

@@ -26,7 +26,7 @@ mullvadvpn-app
 │       │                           // 返回相应tunnel所需参数
 │       └── relays.rs               // 中继方式选择添加tinc
 │                                   // RelayListUpdater 临时屏蔽 relay list的更新，
-│                                   // 避免relay.json丢失tinc相关配置
+│                                   // 避免relays.json丢失tinc相关配置
 │   
 ├── mullvad-types
 │   └── src
@@ -70,7 +70,7 @@ mullvadvpn-app
 ```
 
 ### tinc作为mullvad tunnel 需要的相关配置文件
-#### relay.json.tinc_example
+#### relays.json.tinc_example
 中继节点列表中需要包含可用的tinc中继
 ```
 "tunnels": {

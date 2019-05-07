@@ -14,7 +14,7 @@
                 "tinc": [
                   {
                     "port": 50069,
-                    "protocol": "tcp"
+                    "protocol": "udp"
                   }
                 ]
               },
