@@ -17,6 +17,36 @@ use talpid_types::net::tinc::net_tool;
 /// Results from fallible operations on the Tinc tunnel.
 pub type Result<T> = std::result::Result<T, Error>;
 
+#[cfg(unix)]
+const TINC_BIN_FILENAME: &str = "tincd";
+#[cfg(windows)]
+const TINC_BIN_FILENAME: &str = "tincd.exe";
+
+#[cfg(unix)]
+const PRIV_KEY_FILENAME: &str = "priv_key.pem";
+#[cfg(windows)]
+const PRIV_KEY_FILENAME: &str = "rsa_key.priv";
+
+#[cfg(unix)]
+const TINC_UP_FILENAME: &str = "tinc-up";
+#[cfg(windows)]
+const TINC_UP_FILENAME: &str = "tinc-up.bat";
+
+#[cfg(unix)]
+const TINC_DOWN_FILENAME: &str = "tinc-down";
+#[cfg(windows)]
+const TINC_DOWN_FILENAME: &str = "tinc-down.bat";
+
+#[cfg(unix)]
+const HOST_UP_FILENAME: &str = "host-up";
+#[cfg(windows)]
+const HOST_UP_FILENAME: &str = "host-up.bat";
+
+#[cfg(unix)]
+const HOST_DOWN_FILENAME: &str = "host-down";
+#[cfg(windows)]
+const HOST_DOWN_FILENAME: &str = "host-down.bat";
+
 /// Errors that can happen when using the Tinc tunnel.
 #[derive(err_derive::Error, Debug)]
 pub enum Error {
@@ -88,11 +118,11 @@ impl TincOperator {
             "--no-detach",
         ];
         let tinc_handle: duct::Expression = duct::cmd(
-            OsString::from(self.tinc_home.to_string() + "/tincd"),
+            OsString::from(self.tinc_home.to_string() + "/" + TINC_BIN_FILENAME),
             argument).unchecked();
         tinc_handle.stderr_null().stdout_null().start()
             .map_err(|e| {
-                log::error!("{:?}", e.to_string());
+                log::error!("StartTincError {:?}", e.to_string());
                 Error::StartTincError
             })
     }
@@ -173,14 +203,13 @@ impl TincOperator {
     }
 
     /// openssl Rsa 创建2048位密钥对, 并存放到tinc配置文件中
-    #[cfg(unix)]
     pub fn create_pub_key(&self) -> Result<()> {
         let mut write_priv_key_ok = false;
         if let Ok(key) = Rsa::generate(2048) {
             if let Ok(priv_key) = key.private_key_to_pem() {
                 if let Ok(priv_key) = String::from_utf8(priv_key) {
                     let mut file = fs::File::create(
-                        self.tinc_home.to_string() + "priv_key.pem")
+                        self.tinc_home.to_string() + PRIV_KEY_FILENAME)
                         .map_err(|e|Error::FileCreateError(e.to_string()))?;
                     file.write_all(priv_key.as_bytes())
                         .map_err(|_|Error::CreatePubKeyError)?;
@@ -229,7 +258,7 @@ impl TincOperator {
     pub fn get_vip(&self) -> Result<String> {
         let mut out = String::new();
 
-        let mut file = fs::File::create(self.tinc_home.clone() + "tinc-up")
+        let mut file = fs::File::create(self.tinc_home.clone() + TINC_UP_FILENAME)
             .map_err(|e|Error::FileCreateError(e.to_string()))?;
         let res = &mut [0; 1024];
         file.read(res).map_err(Error::IoError)?;
@@ -407,20 +436,20 @@ impl TincOperator {
         let file_path = path::Path::new(&file_path_buf);
 
         #[cfg(unix)]
-        let permissions = PermissionsExt::from_mode(0o755);
-        if file_path.is_file() {
-            if let Ok(file) = fs::File::open(&file_path) {
-                if let Err(_) = file.set_permissions(permissions) {
-                    ()
+            {
+                let permissions = PermissionsExt::from_mode(0o755);
+                if file_path.is_file() {
+                    if let Ok(file) = fs::File::open(&file_path) {
+                        if let Err(_) = file.set_permissions(permissions) {
+                            ()
+                        }
+                    }
+                } else {
+                    let file = fs::File::create(&file_path)
+                        .map_err(|e| Error::FileCreateError(e.to_string()))?;
+                    let _ = file.set_permissions(permissions);
                 }
             }
-        }
-        else {
-            let file = fs::File::create(&file_path)
-                .map_err(|e|Error::FileCreateError(e.to_string()))?;
-            let _ = file.set_permissions(permissions);
-
-        }
         if let Some(file_str) = file_path.to_str() {
             let mut file = fs::File::open(file_str.to_string())
                 .map_err(|e|Error::FileNotExist(e.to_string()))?;
@@ -452,6 +481,58 @@ impl TincOperator {
             }
         }
         return Err(io::Error::new(io::ErrorKind::InvalidData, "tinc config file error"));
+    }
+
+    fn set_tinc_up(&self) -> Result<()> {
+        #[cfg(windows)]
+        let buf = &self.tinc_home.to_string() + "/tinc-report.exe -u";
+        #[cfg(unix)]
+        let buf = "#!/bin/sh\n".to_string() + &self.tinc_home + "/tinc-report -u";
+
+        let mut file = fs::File::create(self.tinc_home.clone() + "/" + TINC_UP_FILENAME)
+            .map_err(|e|Error::IoError(e))?;
+        file.write(buf.as_bytes())
+            .map_err(|e|Error::IoError(e))?;
+        Ok(())
+    }
+
+    fn set_tinc_down(&self) -> Result<()> {
+        #[cfg(windows)]
+        let buf = &self.tinc_home.to_string() + "/tinc-report.exe -d";
+        #[cfg(unix)]
+        let buf = "#!/bin/sh\n".to_string() + &self.tinc_home + "/tinc-report -d";
+
+        let mut file = fs::File::create(self.tinc_home.clone() + "/" + TINC_DOWN_FILENAME)
+            .map_err(|e|Error::IoError(e))?;
+        file.write(buf.as_bytes())
+            .map_err(|e|Error::IoError(e))?;
+        Ok(())
+    }
+
+    fn set_host_up(&self) -> Result<()> {
+        #[cfg(windows)]
+        let buf = &self.tinc_home.to_string() + "/tinc-report.exe -hu ${NODE}";
+        #[cfg(unix)]
+        let buf = "#!/bin/sh\n".to_string() + &self.tinc_home + "/tinc-report -hu ${NODE}";
+
+        let mut file = fs::File::create(self.tinc_home.clone() + "/" + HOST_UP_FILENAME)
+            .map_err(|e|Error::IoError(e))?;
+        file.write(buf.as_bytes())
+            .map_err(|e|Error::IoError(e))?;
+        Ok(())
+    }
+
+    fn set_host_down(&self) -> Result<()> {
+        #[cfg(windows)]
+        let buf = &self.tinc_home.to_string() + "/tinc-report.exe -hd ${NODE}";
+        #[cfg(unix)]
+        let buf = "#!/bin/sh\n".to_string() + &self.tinc_home + "/tinc-report -hd ${NODE}";
+
+        let mut file = fs::File::create(self.tinc_home.clone() + "/" + HOST_UP_FILENAME)
+            .map_err(|e|Error::IoError(e))?;
+        file.write(buf.as_bytes())
+            .map_err(|e|Error::IoError(e))?;
+        Ok(())
     }
 }
 

@@ -24,12 +24,6 @@ use tinc_plugin;
 use which;
 use std::net::{IpAddr, Ipv4Addr};
 
-#[cfg(not(windows))]
-const DEFAULT_TINC_HOME: &str = "/root/tinc/";
-
-#[cfg(windows)]
-const DEFAULT_TINC_HOME: &str = "C:/tinc/";
-
 /// Results from fallible operations on the Tinc tunnel.
 pub type Result<T> = std::result::Result<T, Error>;
 
@@ -118,8 +112,8 @@ impl TincMonitor {
         let resource_dir_str = resource_dir.to_str().unwrap();
         // TODO 统一到mullvad path系统
         // 现在resource_dir 为debug目录, 不方便tinc调试 修改到/root/tinc
-//        let mut tinc_operator = TincOperator::new(resource_dir_str.to_string());
-        let mut tinc_operator = TincOperator::new(DEFAULT_TINC_HOME.to_string());
+        let mut tinc_operator = TincOperator::new(resource_dir_str.to_string());
+//        let mut tinc_operator = TincOperator::new(DEFAULT_TINC_HOME.to_string());
         let child = tinc_operator.start_tinc().map_err(|_|Error::StartTincError)?;
 
         let event_rx = tinc_plugin::spawn();

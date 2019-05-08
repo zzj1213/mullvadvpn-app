@@ -4,5 +4,11 @@ use tinc_plugin::listener::spawn;
 
 
 fn main() {
-    spawn();
+    let a = spawn();
+    loop {
+        match a.recv() {
+            Ok(event) => println!("{:?}", event),
+            Err(_e) => (),
+        }
+    }
 }

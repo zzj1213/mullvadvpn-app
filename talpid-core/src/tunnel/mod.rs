@@ -57,7 +57,6 @@ pub enum Error {
 
     // add by YanBowen
     /// There was an error listening for events from the Tinc tunnel
-    #[cfg(any(target_os = "linux", target_os = "macos"))]
     #[error(display = "Failed while listening for events from the Tinc tunnel")]
     TincTunnelMonitoringError(#[error(cause)] tinc::Error),
 
