@@ -1,6 +1,6 @@
 {
   "name": "mullvad-vpn",
-  "version": "2019.3.0",
+  "version": "2019.4.0-beta1",
   "productName": "Mullvad VPN",
   "private": true,
   "description": "Mullvad VPN client",
@@ -80,7 +80,7 @@
     "tslint": "^5.15.0",
     "tslint-config-prettier": "^1.18.0",
     "tslint-react": "^4.0.0",
-    "typescript": "^3.3.3"
+    "typescript": "^3.4.5"
   },
   "scripts": {
     "postinstall": "cross-env ELECTRON_BUILDER_ALLOW_UNRESOLVED_DEPENDENCIES=true electron-builder install-app-deps",
