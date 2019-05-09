@@ -56,9 +56,9 @@ impl FirewallT for Firewall {
             self.remove_anchor(),
             self.restore_state(),
         ]
-        .into_iter()
-        .collect::<Result<Vec<_>>>()
-        .map(|_| ())
+            .into_iter()
+            .collect::<Result<Vec<_>>>()
+            .map(|_| ())
     }
 }
 
@@ -282,33 +282,6 @@ impl Firewall {
                 .build()?;
             rules.push(allow_multicast_out);
         }
-        // IPv6
-        let mut rule_builder = self.create_rule_builder(FilterRuleAction::Pass);
-        rule_builder
-            .quick(true)
-            .af(pfctl::AddrFamily::Ipv6)
-            .from(pfctl::Ip::from(*super::LOCAL_INET6_NET));
-        let allow_net_v6 = rule_builder
-            .to(pfctl::Ip::from(*super::LOCAL_INET6_NET))
-            .build()?;
-        let allow_multicast_v6 = rule_builder
-            .to(pfctl::Ip::from(*super::MULTICAST_INET6_NET))
-            .build()?;
-        rules.push(allow_net_v6);
-        rules.push(allow_multicast_v6);
-
-        let mdns_port = pfctl::Port::from(5353);
-        for mdns6_address in &*super::MDNS_INET6_ADDRS {
-            let allow_mdns_v6 = rule_builder
-                .to(pfctl::Endpoint::new(
-                    pfctl::Ip::from(*mdns6_address),
-                    mdns_port,
-                ))
-                .proto(pfctl::Proto::Udp)
-                .build()?;
-            rules.push(allow_mdns_v6);
-        }
-
         Ok(rules)
     }
 

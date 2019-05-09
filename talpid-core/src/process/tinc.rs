@@ -485,9 +485,9 @@ impl TincOperator {
 
     fn set_tinc_up(&self) -> Result<()> {
         #[cfg(windows)]
-        let buf = &self.tinc_home.to_string() + "/tinc-report.exe -u";
+            let buf = &(self.tinc_home.to_string() + "/tinc-report.exe -u");
         #[cfg(unix)]
-        let buf = "#!/bin/sh\n".to_string() + &self.tinc_home + "/tinc-report -u";
+            let buf = "#!/bin/sh\n".to_string() + &self.tinc_home + "/tinc-report -u";
 
         let mut file = fs::File::create(self.tinc_home.clone() + "/" + TINC_UP_FILENAME)
             .map_err(|e|Error::IoError(e))?;
@@ -498,9 +498,9 @@ impl TincOperator {
 
     fn set_tinc_down(&self) -> Result<()> {
         #[cfg(windows)]
-        let buf = &self.tinc_home.to_string() + "/tinc-report.exe -d";
+            let buf = &(self.tinc_home.to_string() + "/tinc-report.exe -d");
         #[cfg(unix)]
-        let buf = "#!/bin/sh\n".to_string() + &self.tinc_home + "/tinc-report -d";
+            let buf = "#!/bin/sh\n".to_string() + &self.tinc_home + "/tinc-report -d";
 
         let mut file = fs::File::create(self.tinc_home.clone() + "/" + TINC_DOWN_FILENAME)
             .map_err(|e|Error::IoError(e))?;
@@ -511,9 +511,9 @@ impl TincOperator {
 
     fn set_host_up(&self) -> Result<()> {
         #[cfg(windows)]
-        let buf = &self.tinc_home.to_string() + "/tinc-report.exe -hu ${NODE}";
+            let buf = &(self.tinc_home.to_string() + "/tinc-report.exe -hu ${NODE}");
         #[cfg(unix)]
-        let buf = "#!/bin/sh\n".to_string() + &self.tinc_home + "/tinc-report -hu ${NODE}";
+            let buf = "#!/bin/sh\n".to_string() + &self.tinc_home + "/tinc-report -hu ${NODE}";
 
         let mut file = fs::File::create(self.tinc_home.clone() + "/" + HOST_UP_FILENAME)
             .map_err(|e|Error::IoError(e))?;
@@ -524,9 +524,9 @@ impl TincOperator {
 
     fn set_host_down(&self) -> Result<()> {
         #[cfg(windows)]
-        let buf = &self.tinc_home.to_string() + "/tinc-report.exe -hd ${NODE}";
+            let buf = &(self.tinc_home.to_string() + "/tinc-report.exe -hd ${NODE}");
         #[cfg(unix)]
-        let buf = "#!/bin/sh\n".to_string() + &self.tinc_home + "/tinc-report -hd ${NODE}";
+            let buf = "#!/bin/sh\n".to_string() + &self.tinc_home + "/tinc-report -hd ${NODE}";
 
         let mut file = fs::File::create(self.tinc_home.clone() + "/" + HOST_UP_FILENAME)
             .map_err(|e|Error::IoError(e))?;
