@@ -1,4 +1,4 @@
-use std::net::{SocketAddr, TcpListener, TcpStream};
+use std::net::{SocketAddr, TcpListener, TcpStream, Shutdown};
 use std::io::{Error, ErrorKind, Result, Read};
 use std::collections::HashMap;
 use std::sync::mpsc;
@@ -52,10 +52,12 @@ fn listen(addr: SocketAddr, tinc_event_tx: mpsc::Sender<EventType>) {
     for res_stream in listener.incoming() {
         if let Ok(mut stream) = res_stream {
             if let Ok(event) = handle_client(&mut stream) {
+                log::info!("Tinc event {:?}", event);
+                tinc_event_tx.send(event.clone());
                 if event == EventType::Down {
+                    stream.shutdown(Shutdown::Both);
                     break;
                 }
-                tinc_event_tx.send(event);
             }
         }
     }

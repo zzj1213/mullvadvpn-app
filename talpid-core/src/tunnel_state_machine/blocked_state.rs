@@ -16,19 +16,20 @@ impl BlockedState {
         let policy = FirewallPolicy::Blocked {
             allow_lan: shared_values.allow_lan,
         };
-
-        match shared_values.firewall.apply_policy(policy) {
-            Ok(()) => None,
-            Err(error) => {
-                log::error!(
-                    "{}",
-                    error.display_chain_with_msg(
-                        "Failed to apply firewall policy for blocked state"
-                    )
-                );
-                Some(BlockReason::SetFirewallPolicyError)
-            }
-        }
+//      modify by YanBowen
+//        match shared_values.firewall.apply_policy(policy) {
+//            Ok(()) => None,
+//            Err(error) => {
+//                log::error!(
+//                    "{}",
+//                    error.display_chain_with_msg(
+//                        "Failed to apply firewall policy for blocked state"
+//                    )
+//                );
+//                Some(BlockReason::SetFirewallPolicyError)
+//            }
+//        }
+        None
     }
 }
 

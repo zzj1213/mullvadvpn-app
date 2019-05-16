@@ -11,7 +11,9 @@ pub struct DisconnectedState;
 
 impl DisconnectedState {
     fn set_firewall_policy(shared_values: &mut SharedTunnelStateValues) {
-        let result = if shared_values.block_when_disconnected {
+//        modify by YanBowen
+//        let result = if shared_values.block_when_disconnected {
+        let result = if false {
             let policy = FirewallPolicy::Blocked {
                 allow_lan: shared_values.allow_lan,
             };

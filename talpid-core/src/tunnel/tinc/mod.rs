@@ -18,11 +18,19 @@ use std::{
 use std::str::FromStr;
 use talpid_types::net::tinc;
 
+use std::net::{TcpStream, SocketAddr};
+use std::io::Write;
+
 use tinc_plugin;
 
 #[cfg(target_os = "linux")]
 use which;
 use std::net::{IpAddr, Ipv4Addr};
+
+mod ping_monitor;
+
+// amount of seconds to run `ping` until it returns.
+const PING_TIMEOUT: u16 = 7;
 
 /// Results from fallible operations on the Tinc tunnel.
 pub type Result<T> = std::result::Result<T, Error>;
@@ -92,6 +100,7 @@ pub struct TincMonitor {
     tinc:               TincOperator,
     on_event:           Box<dyn Fn(TunnelEvent) + Send + Sync + 'static>,
     log_path:           Option<PathBuf>,
+    resource_dir:       PathBuf,
     event_rx:           mpsc::Receiver<tinc_plugin::EventType>,
     child:              Arc<duct::Handle>,
     closed:             Arc<AtomicBool>,
@@ -107,22 +116,48 @@ impl TincMonitor {
         resource_dir:   &Path,
     ) -> Result<Self>
         where
-            L: Fn(TunnelEvent) + Send + Sync + 'static,
+            L: Fn(TunnelEvent) + Send + Sync + Clone + 'static,
     {
         let resource_dir_str = resource_dir.to_str().unwrap();
-        // TODO 统一到mullvad path系统
-        // 现在resource_dir 为debug目录, 不方便tinc调试 修改到/root/tinc
-        let mut tinc_operator = TincOperator::new(resource_dir_str.to_string());
-//        let mut tinc_operator = TincOperator::new(DEFAULT_TINC_HOME.to_string());
+
+        let mut tinc_operator = TincOperator::new(resource_dir_str.to_string() + "/tinc/");
+
         let child = tinc_operator.start_tinc().map_err(|_|Error::StartTincError)?;
 
         let event_rx = tinc_plugin::spawn();
 
-        let on_event = Box::new(on_event);
+        let pinger_event = on_event.clone();
+        {
+            let vip_str = tinc_operator.get_vip().map_err(Error::TincOperatorError)?;
+            let vip = Ipv4Addr::from_str(&vip_str).unwrap();
+            let ips = vec![IpAddr::from(vip.clone())];
+
+            let interface_name = "tun0";
+            let metadata = TunnelMetadata {
+                interface: interface_name.to_string(),
+                ips,
+                ipv4_gateway: vip,
+                ipv6_gateway: None
+            };
+
+            ::std::thread::spawn(move || {
+                if let Ok(()) = ping_monitor::ping(
+                    IpAddr::from(vip.clone()),
+                    PING_TIMEOUT,
+                    &interface_name,
+                    true) {
+                    (pinger_event)(TunnelEvent::Up(metadata));
+                };
+            });
+        }
+
+        let on_event = Box::new(on_event.clone());
+
         return Ok(TincMonitor {
             tinc: tinc_operator,
             on_event,
             log_path: log_file,
+            resource_dir: resource_dir.to_owned(),
             event_rx,
             child: Arc::new(child),
             closed: Arc::new(AtomicBool::new(false)),
@@ -152,10 +187,17 @@ impl TincMonitor {
                 self.tunnel_up()?;
                 return Ok(());
             },
-            Ok(_) => Ok(()),
-            Err(_) => Ok(()),
+            Ok(tinc_plugin::EventType::Down) => {
+                (self.on_event)(TunnelEvent::Down);
+                return Ok(());
+            },
+            Ok(_) => {
+                Ok(())
+            },
+            Err(_) => {
+                Ok(())
+            },
         };
-        (self.on_event)(TunnelEvent::Down);
         wait_result
     }
 
@@ -165,6 +207,7 @@ impl TincMonitor {
         TincCloseHandle {
             child: self.child.clone(),
             closed: self.closed.clone(),
+            pid_file: self.resource_dir.clone().join("/tinc/tinc.pid"),
         }
     }
 }
@@ -173,6 +216,7 @@ impl TincMonitor {
 pub struct TincCloseHandle {
     child:              Arc<duct::Handle>,
     closed:             Arc<AtomicBool>,
+    pid_file:           PathBuf
 }
 
 impl TincCloseHandle {
@@ -180,9 +224,21 @@ impl TincCloseHandle {
     /// making the `TincMonitor::wait` method return.
     pub fn close(self) -> io::Result<()> {
         if !self.closed.swap(true, Ordering::SeqCst) {
-            self.child.kill()
+            if let Err(e) = tinc_plugin::control::stop(
+                self.pid_file.to_str().unwrap()){
+                log::warn!("{}", e);
+                self.child.kill();
+                sender_tinc_close();
+            };
+            Ok(())
         } else {
             Ok(())
         }
     }
+}
+
+fn sender_tinc_close() {
+    let addr = SocketAddr::from(([127, 0, 0, 1], 50070));
+    let mut stream = TcpStream::connect(&addr).expect("Tinc Monitor not exist");
+    stream.write("Down".as_bytes()).expect("Tinc Monitor not exist");
 }

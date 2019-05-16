@@ -54,7 +54,9 @@ impl ConnectingState {
             pingable_hosts: gateway_list_from_params(params),
             allow_lan: shared_values.allow_lan,
         };
-        shared_values.firewall.apply_policy(policy)
+//        modify by YanBowen
+//        shared_values.firewall.apply_policy(policy)
+        Ok(())
     }
 
     fn start_tunnel(

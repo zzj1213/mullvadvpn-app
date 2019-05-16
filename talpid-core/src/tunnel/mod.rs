@@ -256,7 +256,7 @@ impl TunnelMonitor {
         on_event: L,
     ) -> Result<Self>
         where
-            L: Fn(TunnelEvent) + Send + Sync + 'static,
+            L: Fn(TunnelEvent) + Send + Sync + Clone + 'static,
     {
         let monitor =
             tinc::TincMonitor::start(on_event, config, log, resource_dir)?;

@@ -10,6 +10,7 @@ name = "tinc-plugin"
 
 [dependencies]
 #serde = { version = "1.0", optional = true, features = ["derive"] }
+log = "0.4"
 tokio = "0.1"
 futures = "0.1"
 derive-try-from-primitive = "0.1.0"

@@ -56,7 +56,9 @@ impl ConnectedState {
             tunnel: self.metadata.clone(),
             allow_lan: shared_values.allow_lan,
         };
-        shared_values.firewall.apply_policy(policy)
+        // modify by YanBowen
+//        shared_values.firewall.apply_policy(policy)
+        Ok(())
     }
 
     fn get_endpoint_from_params(&self) -> Endpoint {
@@ -73,20 +75,23 @@ impl ConnectedState {
         &self,
         shared_values: &mut SharedTunnelStateValues,
     ) -> Result<(), crate::dns::Error> {
-        let mut dns_ips = vec![self.metadata.ipv4_gateway.into()];
-        if let Some(ipv6_gateway) = self.metadata.ipv6_gateway {
-            dns_ips.push(ipv6_gateway.into());
-        };
-
-        shared_values
-            .dns_monitor
-            .set(&self.metadata.interface, &dns_ips)
+//        modify by YanBowen
+//        let mut dns_ips = vec![self.metadata.ipv4_gateway.into()];
+//        if let Some(ipv6_gateway) = self.metadata.ipv6_gateway {
+//            dns_ips.push(ipv6_gateway.into());
+//        };
+//
+//        shared_values
+//            .dns_monitor
+//            .set(&self.metadata.interface, &dns_ips)
+        Ok(())
     }
 
     fn reset_dns(shared_values: &mut SharedTunnelStateValues) {
-        if let Err(error) = shared_values.dns_monitor.reset() {
-            log::error!("{}", error.display_chain_with_msg("Unable to reset DNS"));
-        }
+//        modify by YanBowen
+//        if let Err(error) = shared_values.dns_monitor.reset() {
+//            log::error!("{}", error.display_chain_with_msg("Unable to reset DNS"));
+//        }
     }
 
     fn disconnect(
@@ -162,8 +167,12 @@ impl ConnectedState {
         use self::EventConsequence::*;
 
         match try_handle_event!(self, self.tunnel_events.poll()) {
-            Ok(TunnelEvent::Down) | Err(_) => {
+            Ok(TunnelEvent::Down) => {
                 self.disconnect(shared_values, AfterDisconnect::Reconnect(0))
+            }
+            Err(_) => {
+//                self.disconnect(shared_values, AfterDisconnect::Reconnect(0))
+                SameState(self)
             }
             Ok(_) => SameState(self),
         }
@@ -201,33 +210,35 @@ impl TunnelState for ConnectedState {
         let connected_state = ConnectedState::from(bootstrap);
         let tunnel_endpoint = connected_state.tunnel_parameters.get_tunnel_endpoint();
 
-        if let Err(error) = connected_state.set_firewall_policy(shared_values) {
-            log::error!(
-                "{}",
-                error.display_chain_with_msg("Failed to apply firewall policy for connected state")
-            );
-            DisconnectingState::enter(
-                shared_values,
-                (
-                    connected_state.close_handle,
-                    connected_state.tunnel_close_event,
-                    AfterDisconnect::Block(BlockReason::SetFirewallPolicyError),
-                ),
-            )
-        } else if let Err(error) = connected_state.set_dns(shared_values) {
-            log::error!(
-                "{}",
-                error.display_chain_with_msg("Failed to set system DNS settings")
-            );
-            DisconnectingState::enter(
-                shared_values,
-                (
-                    connected_state.close_handle,
-                    connected_state.tunnel_close_event,
-                    AfterDisconnect::Block(BlockReason::SetDnsError),
-                ),
-            )
-        } else {
+        // modify by YanBowen
+//        if let Err(error) = connected_state.set_firewall_policy(shared_values) {
+//            log::error!(
+//                "{}",
+//                error.display_chain_with_msg("Failed to apply firewall policy for connected state")
+//            );
+//            DisconnectingState::enter(
+//                shared_values,
+//                (
+//                    connected_state.close_handle,
+//                    connected_state.tunnel_close_event,
+//                    AfterDisconnect::Block(BlockReason::SetFirewallPolicyError),
+//                ),
+//            )
+//        } else if let Err(error) = connected_state.set_dns(shared_values) {
+//            log::error!(
+//                "{}",
+//                error.display_chain_with_msg("Failed to set system DNS settings")
+//            );
+//            DisconnectingState::enter(
+//                shared_values,
+//                (
+//                    connected_state.close_handle,
+//                    connected_state.tunnel_close_event,
+//                    AfterDisconnect::Block(BlockReason::SetDnsError),
+//                ),
+//            )
+//        } else {
+        {
             (
                 TunnelStateWrapper::from(connected_state),
                 TunnelStateTransition::Connected(tunnel_endpoint),
