@@ -59,6 +59,7 @@ impl ConnectingState {
         Ok(())
     }
 
+    #[cfg_attr(target_os = "android", allow(unused_variables))]
     fn start_tunnel(
         parameters: TunnelParameters,
         log_dir: &Option<PathBuf>,

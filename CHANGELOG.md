@@ -27,6 +27,8 @@ Line wrap the file at 100 chars.                                              Th
 - Add support for roaming between connections when using wireguard
 - Allow mDNS/discover to 239.255.255.251 when local network sharing is enabled. This change fixes
   the Wi-Fi calling via iPhone when both devices are on the same network.
+- Allow incoming DHCPv4 requests and outgoing responses if allow local network is enabled. Enables
+  being a DHCPv4 server.
 
 #### Linux
 - Add standard window decorations to the application window.
@@ -39,6 +41,14 @@ Line wrap the file at 100 chars.                                              Th
 ### Fixed
 - Stop allowing the wrong IPv6 net fe02::/16 in the firewall when allow local network was enabled.
   Instead allow the correct multicast nets ff02::/16 and ff05::/16.
+- Fix the regression that allowed to get past the login screen using the invalid account token.
+
+#### macOS
+- Raise max number of open files for the daemon to 1024. Should prevent threads from panicking.
+
+
+## [2019.4] - 2019-05-08
+This release is identical to 2019.4-beta1
 
 
 ## [2019.4-beta1] - 2019-05-02
