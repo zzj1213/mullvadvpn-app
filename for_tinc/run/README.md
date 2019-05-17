@@ -39,16 +39,22 @@ cargo build --release
 
 ## 运行:
 ```
+设置mullvad运行文件env
+MULLVAD_RESOURCE_DIR
+
+设置mullvad设置文件env
+MULLVAD_SETTINGS_DIR
+
 将当前目录下
 api_root_ca.pem             mullvad rpc https ca证书
 ca.crt
 tincd(windows下tincd.exe)
 上级目录下
 relays.json.tinc_example   重命名为relays.json
-拷贝到mullvad-daemon运行目录.比如target/debug/
+拷贝到mullvad-daemon运行目录.
 
 settings.json.tinc_example   重命名为settings.json
-拷贝到/etc/mullvad-vpn
+拷贝到MULLVAD_SETTINGS_DIR linux下为/etc/mullvad
 
 运行mullvad-daemon, 通过mullvad 命令行控制mullvad-daemon
 ```

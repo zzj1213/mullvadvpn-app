@@ -262,10 +262,16 @@ impl TincOperator {
         let res = &mut [0; 2048];
         file.read(res).map_err(Error::IoError)?;
         let res = String::from_utf8_lossy(res);
-        let res: Vec<&str> = res.split("vpngw=").collect();
+        #[cfg(unix)]
+            let res: Vec<&str> = res.split("vpngw=").collect();
+        #[cfg(windows)]
+            let res: Vec<&str> = res.split("addr=\"").collect();
         if res.len() > 1 {
             let res = res[1].to_string();
-            let res: Vec<&str> = res.split("\n").collect();
+            #[cfg(unix)]
+                let res: Vec<&str> = res.split("\n").collect();
+            #[cfg(windows)]
+                let res: Vec<&str> = res.split("\" ").collect();
             if res.len() > 1 {
                 out = res[0].to_string();
             }
