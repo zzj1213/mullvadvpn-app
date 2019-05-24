@@ -9,16 +9,14 @@
 #![deny(rust_2018_idioms)]
 
 use log::{debug, error, info, warn};
-use mullvad_daemon::Daemon;
+use mullvad_daemon::{logging, version, Daemon};
 use std::{path::PathBuf, thread, time::Duration};
 use talpid_types::ErrorExt;
 
 mod cli;
-mod logging;
 mod shutdown;
 #[cfg(windows)]
 mod system_service;
-mod version;
 
 const DAEMON_LOG_FILENAME: &str = "daemon.log";
 
@@ -50,7 +48,7 @@ fn init_logging(config: &cli::Config) -> Result<Option<PathBuf>, String> {
     )
     .map_err(|e| e.display_chain_with_msg("Unable to initialize logger"))?;
     log_panics::init();
-    log_version();
+    version::log_version();
     if let Some(ref log_dir) = log_dir {
         info!("Logging to {}", log_dir.display());
     }
@@ -119,15 +117,6 @@ fn create_daemon(log_dir: Option<PathBuf>) -> Result<Daemon, String> {
         version::PRODUCT_VERSION.to_owned(),
     )
     .map_err(|e| e.display_chain_with_msg("Unable to initialize daemon"))
-}
-
-fn log_version() {
-    info!(
-        "Starting {} - {} {}",
-        env!("CARGO_PKG_NAME"),
-        version::PRODUCT_VERSION,
-        version::COMMIT_DATE,
-    )
 }
 
 #[cfg(unix)]

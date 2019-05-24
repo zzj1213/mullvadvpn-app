@@ -1,12 +1,17 @@
 package net.mullvad.mullvadvpn.relaylist
 
+import net.mullvad.mullvadvpn.model.LocationConstraint
+
 class RelayCity(
     override val name: String,
+    val countryCode: String,
     override val code: String,
     override var expanded: Boolean,
     val relays: List<Relay>
 ) : RelayItem {
     override val type = RelayItemType.City
+    override val location = LocationConstraint.City(countryCode, code)
+
     override val hasChildren
         get() = relays.size > 1
 
@@ -47,6 +52,4 @@ class RelayCity(
     }
 
     fun getRelayCount(): Int = relays.size
-
-    fun findRelayByCode(code: String): RelayItem? = relays.find { relay -> relay.code == code }
 }
