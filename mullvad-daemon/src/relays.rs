@@ -14,8 +14,8 @@ use mullvad_types::{
     endpoint::MullvadEndpoint,
     location::Location,
     relay_constraints::{
-        Constraint, LocationConstraint, Match, OpenVpnConstraints, RelayConstraints,
-        TunnelConstraints, WireguardConstraints,
+        Constraint, InternalBridgeConstraints, LocationConstraint, Match, OpenVpnConstraints,
+        RelayConstraints, TunnelConstraints, WireguardConstraints,
     },
     relay_list::{Relay, RelayList, RelayTunnels, WireguardEndpointData},
 };
@@ -28,7 +28,7 @@ use std::{
     time::{self, Duration, SystemTime},
 };
 use talpid_types::{
-    net::{all_of_the_internet, wireguard, TransportProtocol},
+    net::{all_of_the_internet, openvpn::ProxySettings, wireguard, TransportProtocol},
     ErrorExt,
 };
 
@@ -42,7 +42,7 @@ const DOWNLOAD_TIMEOUT: Duration = Duration::from_secs(15);
 /// How often the updater should wake up to check the cache of the in-memory cache of relays.
 /// This check is very cheap. The only reason to not have it very often is because if downloading
 /// constantly fails it will try very often and fill the logs etc.
-const UPDATE_CHECK_INTERVAL: Duration = Duration::from_secs(60 * 2);
+const UPDATE_CHECK_INTERVAL: Duration = Duration::from_secs(60 * 5);
 /// How old the cached relays need to be to trigger an update
 const UPDATE_INTERVAL: Duration = Duration::from_secs(3600);
 
@@ -98,12 +98,6 @@ impl ParsedRelays {
                 let city_code = city.code.clone();
                 let latitude = city.latitude;
                 let longitude = city.longitude;
-                city.relays = city
-                    .relays
-                    .iter()
-                    .filter(|relay| !relay.tunnels.is_empty())
-                    .cloned()
-                    .collect();
                 for relay in &mut city.relays {
                     let mut relay_with_location = relay.clone();
                     relay_with_location.location = Some(Location {
@@ -223,24 +217,25 @@ impl RelaySelector {
     /// preferences applied.
     pub fn get_tunnel_endpoint(
         &mut self,
-        constraints: &RelayConstraints,
+        relay_constraints: &RelayConstraints,
         retry_attempt: u32,
     ) -> Result<(Relay, MullvadEndpoint), Error> {
-        let preferred_constraints = Self::preferred_constraints(constraints, retry_attempt);
+        let preferred_constraints = Self::preferred_constraints(relay_constraints, retry_attempt);
         if let Some((relay, endpoint)) = self.get_tunnel_endpoint_internal(&preferred_constraints) {
             debug!(
                 "Relay matched on highest preference for retry attempt {}",
                 retry_attempt
             );
             Ok((relay, endpoint))
-        } else if let Some((relay, endpoint)) = self.get_tunnel_endpoint_internal(constraints) {
+        } else if let Some((relay, endpoint)) = self.get_tunnel_endpoint_internal(relay_constraints)
+        {
             debug!(
                 "Relay matched on second preference for retry attempt {}",
                 retry_attempt
             );
             Ok((relay, endpoint))
         } else {
-            warn!("No relays matching {}", constraints);
+            warn!("No relays matching {}", relay_constraints);
             Err(Error::NoRelay)
         }
     }
@@ -289,6 +284,59 @@ impl RelaySelector {
         }
     }
 
+    pub fn get_auto_proxy_settings(
+        &mut self,
+        bridge_constraints: &InternalBridgeConstraints,
+        location: &Location,
+        retry_attempt: u32,
+    ) -> Option<ProxySettings> {
+        if !self.should_use_bridge(retry_attempt) {
+            return None;
+        }
+
+        // For now, only TCP tunnels are supported.
+        if let &Constraint::Only(TransportProtocol::Udp) = &bridge_constraints.transport_protocol {
+            return None;
+        }
+
+        self.get_proxy_settings(bridge_constraints, location)
+    }
+
+    pub fn should_use_bridge(&self, retry_attempt: u32) -> bool {
+        // shouldn't use a bridge for the first 3 times
+        retry_attempt > 3 &&
+            // i.e. 4th and 5th with bridge, 6th & 7th without
+            // The test is to see whether the current _couple of connections_ is even or not.
+            // | retry_attempt                | 4 | 5 | 6 | 7 | 8 | 9 |
+            // | (retry_attempt % 4) < 2      | t | t | f | f | t | t |
+            (retry_attempt % 4) < 2
+    }
+
+    pub fn get_proxy_settings(
+        &mut self,
+        constraints: &InternalBridgeConstraints,
+        location: &Location,
+    ) -> Option<ProxySettings> {
+        let mut matching_relays: Vec<Relay> = self
+            .lock_parsed_relays()
+            .relays()
+            .iter()
+            .filter_map(|relay| Self::matching_bridge_relay(relay, constraints))
+            .collect();
+
+        if matching_relays.len() == 0 {
+            return None;
+        }
+
+        matching_relays.sort_by_cached_key(|relay| {
+            (relay.location.as_ref().unwrap().distance_from(&location) * 1000.0) as i64
+        });
+        return matching_relays
+            .get(0)
+            .and_then(|relay| self.pick_random_bridge(&relay));
+    }
+
+
     /// Returns a random relay endpoint if any is matching the given constraints.
     fn get_tunnel_endpoint_internal(
         &mut self,
@@ -315,31 +363,10 @@ impl RelaySelector {
     /// Takes a `Relay` and a corresponding `RelayConstraints` and returns a new `Relay` if the
     /// given relay matches the constraints.
     fn matching_relay(relay: &Relay, constraints: &RelayConstraints) -> Option<Relay> {
-        let matches_location = match constraints.location {
-            Constraint::Any => true,
-            Constraint::Only(LocationConstraint::Country(ref country)) => {
-                relay
-                    .location
-                    .as_ref()
-                    .map_or(false, |loc| loc.country_code == *country)
-                    && relay.include_in_country
-            }
-            Constraint::Only(LocationConstraint::City(ref country, ref city)) => {
-                relay.location.as_ref().map_or(false, |loc| {
-                    loc.country_code == *country && loc.city_code == *city
-                })
-            }
-            Constraint::Only(LocationConstraint::Hostname(ref country, ref city, ref hostname)) => {
-                relay.location.as_ref().map_or(false, |loc| {
-                    loc.country_code == *country
-                        && loc.city_code == *city
-                        && relay.hostname == *hostname
-                })
-            }
-        };
-        if !matches_location {
+        if !Self::relay_matches_location(relay, &constraints.location) {
             return None;
         }
+
         let relay = match constraints.tunnel {
             Constraint::Any => relay.clone(),
             Constraint::Only(ref tunnel_constraints) => {
@@ -365,6 +392,51 @@ impl RelaySelector {
         } else {
             None
         }
+    }
+
+    fn relay_matches_location(relay: &Relay, location: &Constraint<LocationConstraint>) -> bool {
+        match location {
+            Constraint::Any => true,
+            Constraint::Only(LocationConstraint::Country(ref country)) => {
+                relay
+                    .location
+                    .as_ref()
+                    .map_or(false, |loc| loc.country_code == *country)
+                    && relay.include_in_country
+            }
+            Constraint::Only(LocationConstraint::City(ref country, ref city)) => {
+                relay.location.as_ref().map_or(false, |loc| {
+                    loc.country_code == *country && loc.city_code == *city
+                })
+            }
+            Constraint::Only(LocationConstraint::Hostname(ref country, ref city, ref hostname)) => {
+                relay.location.as_ref().map_or(false, |loc| {
+                    loc.country_code == *country
+                        && loc.city_code == *city
+                        && relay.hostname == *hostname
+                })
+            }
+        }
+    }
+
+    fn matching_bridge_relay(
+        relay: &Relay,
+        constraints: &InternalBridgeConstraints,
+    ) -> Option<Relay> {
+        if !Self::relay_matches_location(relay, &constraints.location) {
+            return None;
+        }
+
+        let mut filtered_relay = relay.clone();
+        filtered_relay
+            .bridges
+            .shadowsocks
+            .retain(|bridge| constraints.transport_protocol.matches(&bridge.protocol));
+        if filtered_relay.bridges.shadowsocks.len() == 0 {
+            return None;
+        }
+
+        Some(filtered_relay)
     }
 
     /// Takes a `RelayTunnels` object which in turn is a collection of tunnel configurations for
@@ -422,6 +494,15 @@ impl RelaySelector {
                     .unwrap(),
             )
         }
+    }
+
+    /// Picks a random bridge from a relay.
+    fn pick_random_bridge(&mut self, relay: &Relay) -> Option<ProxySettings> {
+        relay
+            .bridges
+            .shadowsocks
+            .choose(&mut self.rng)
+            .map(|data| data.clone().to_proxy_settings(relay.ipv4_addr_in.into()))
     }
 
     fn get_random_tunnel(
@@ -599,10 +680,7 @@ impl RelayListUpdater {
             if self.should_update() {
                 match self.update() {
                     Ok(()) => info!("Updated list of relays"),
-                    Err(error) => error!(
-                        "{}",
-                        error.display_chain_with_msg("Failed to update list of relays")
-                    ),
+                    Err(error) => error!("{}", error.display_chain()),
                 }
             }
         }
@@ -652,8 +730,6 @@ impl RelayListUpdater {
     }
 
     fn download_relay_list(&mut self) -> Result<RelayList, Error> {
-        info!("Downloading list of relays...");
-
         let download_future = self.rpc_client.relay_list_v2().map_err(Error::Download);
         let relay_list = Timer::default()
             .timeout(download_future, DOWNLOAD_TIMEOUT)

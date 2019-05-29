@@ -36,8 +36,8 @@ use mullvad_types::{
     endpoint::MullvadEndpoint,
     location::GeoIpLocation,
     relay_constraints::{
-        Constraint, OpenVpnConstraints, RelayConstraintsUpdate, RelaySettings, RelaySettingsUpdate,
-        TunnelConstraints,
+        BridgeSettings, BridgeState, Constraint, InternalBridgeConstraints, OpenVpnConstraints,
+        RelayConstraintsUpdate, RelaySettings, RelaySettingsUpdate, TunnelConstraints,
     },
     relay_list::{Relay, RelayList},
     settings::{self, Settings},
@@ -47,6 +47,7 @@ use mullvad_types::{
 use std::{io, mem, path::PathBuf, sync::mpsc, thread, time::Duration};
 use talpid_core::{
     mpsc::IntoSender,
+    tunnel::tun_provider::{PlatformTunProvider, TunProvider},
     tunnel_state_machine::{self, TunnelCommand, TunnelParametersGenerator},
 };
 use talpid_types::{
@@ -95,6 +96,9 @@ pub enum Error {
 
     #[error(display = "No wireguard private key available")]
     NoKeyAvailable,
+
+    #[error(display = "No bridge available")]
+    NoBridgeAvailable,
 
     #[error(display = "Account history problems")]
     AccountHistory(#[error(cause)] account_history::Error),
@@ -236,6 +240,7 @@ impl Daemon<ManagementInterfaceEventBroadcaster> {
             tx,
             rx,
             management_interface_broadcaster,
+            PlatformTunProvider::default(),
             log_dir,
             resource_dir,
             cache_dir,
@@ -281,8 +286,9 @@ impl<L> Daemon<L>
 where
     L: EventListener + Clone + Send + 'static,
 {
-    pub fn start_with_event_listener(
+    pub fn start_with_event_listener_and_tun_provider(
         event_listener: L,
+        tun_provider: impl TunProvider,
         log_dir: Option<PathBuf>,
         resource_dir: PathBuf,
         cache_dir: PathBuf,
@@ -294,6 +300,7 @@ where
             tx,
             rx,
             event_listener,
+            tun_provider,
             log_dir,
             resource_dir,
             cache_dir,
@@ -305,6 +312,7 @@ where
         internal_event_tx: mpsc::Sender<InternalDaemonEvent>,
         internal_event_rx: mpsc::Receiver<InternalDaemonEvent>,
         event_listener: L,
+        tun_provider: impl TunProvider,
         log_dir: Option<PathBuf>,
         resource_dir: PathBuf,
         cache_dir: PathBuf,
@@ -348,6 +356,7 @@ where
             settings.get_allow_lan(),
             settings.get_block_when_disconnected(),
             tunnel_parameters_generator,
+            tun_provider,
             log_dir,
             resource_dir,
             cache_dir.clone(),
@@ -449,7 +458,8 @@ where
                 RelaySettings::CustomTunnelEndpoint(custom_relay) => {
                     self.last_generated_relay = None;
                     custom_relay
-                        .to_tunnel_parameters(self.settings.get_tunnel_options().clone())
+                        // TODO(emilsp): generate proxy settings for custom tunnels
+                        .to_tunnel_parameters(self.settings.get_tunnel_options().clone(), None)
                         .map_err(|e| {
                             e.display_chain_with_msg("Custom tunnel endpoint could not be resolved")
                         })
@@ -463,9 +473,16 @@ where
                         )
                     })
                     .and_then(|(relay, endpoint)| {
+                        let result = self
+                            .create_tunnel_parameters(
+                                &relay,
+                                endpoint,
+                                account_token,
+                                retry_attempt,
+                            )
+                            .map_err(|e| e.display_chain());
                         self.last_generated_relay = Some(relay);
-                        self.create_tunnel_parameters(endpoint, account_token)
-                            .map_err(|e| e.display_chain())
+                        result
                     }),
             }
             .and_then(|tunnel_params| {
@@ -482,17 +499,62 @@ where
 
     fn create_tunnel_parameters(
         &mut self,
+        relay: &Relay,
         endpoint: MullvadEndpoint,
         account_token: String,
+        retry_attempt: u32,
     ) -> Result<TunnelParameters> {
         let tunnel_options = self.settings.get_tunnel_options().clone();
+        let location = relay.location.as_ref().expect("Relay has no location set");
         match endpoint {
-            MullvadEndpoint::OpenVpn(endpoint) => Ok(openvpn::TunnelParameters {
-                config: openvpn::ConnectionConfig::new(endpoint, account_token, "-".to_string()),
-                options: tunnel_options.openvpn,
-                generic_options: tunnel_options.generic,
+            MullvadEndpoint::OpenVpn(endpoint) => {
+                let proxy_settings = match self.settings.get_bridge_settings() {
+                    BridgeSettings::Normal(settings) => {
+                        let bridge_constraints = InternalBridgeConstraints {
+                            location: settings.location.clone(),
+                            transport_protocol: Constraint::Only(endpoint.protocol),
+                        };
+                        match self.settings.get_bridge_state() {
+                            BridgeState::On => Some(
+                                self.relay_selector
+                                    .get_proxy_settings(&bridge_constraints, location)
+                                    .ok_or(Error::NoBridgeAvailable)?,
+                            ),
+                            BridgeState::Auto => self.relay_selector.get_auto_proxy_settings(
+                                &bridge_constraints,
+                                location,
+                                retry_attempt,
+                            ),
+                            BridgeState::Off => None,
+                        }
+                    }
+                    BridgeSettings::Custom(proxy_settings) => {
+                        match self.settings.get_bridge_state() {
+                            BridgeState::On => Some(proxy_settings.clone()),
+                            BridgeState::Auto => {
+                                if self.relay_selector.should_use_bridge(retry_attempt) {
+                                    Some(proxy_settings.clone())
+                                } else {
+                                    None
+                                }
+                            }
+                            BridgeState::Off => None,
+                        }
+                    }
+                };
+
+                Ok(openvpn::TunnelParameters {
+                    config: openvpn::ConnectionConfig::new(
+                        endpoint,
+                        account_token,
+                        "-".to_string(),
+                    ),
+                    options: tunnel_options.openvpn,
+                    generic_options: tunnel_options.generic,
+                    proxy: proxy_settings,
+                }
+                .into())
             }
-            .into()),
 
             // add by YanBowen
             MullvadEndpoint::Tinc(endpoint) => {
@@ -589,7 +651,10 @@ where
             }
             SetAutoConnect(tx, auto_connect) => self.on_set_auto_connect(tx, auto_connect),
             SetOpenVpnMssfix(tx, mssfix_arg) => self.on_set_openvpn_mssfix(tx, mssfix_arg),
-            SetOpenVpnProxy(tx, proxy) => self.on_set_openvpn_proxy(tx, proxy),
+            SetBridgeSettings(tx, bridge_settings) => {
+                self.on_set_bridge_settings(tx, bridge_settings)
+            }
+            SetBridgeState(tx, bridge_state) => self.on_set_bridge_state(tx, bridge_state),
             SetEnableIpv6(tx, enable_ipv6) => self.on_set_enable_ipv6(tx, enable_ipv6),
             SetWireguardMtu(tx, mtu) => self.on_set_wireguard_mtu(tx, mtu),
             GetSettings(tx) => self.on_get_settings(tx),
@@ -845,35 +910,62 @@ where
         }
     }
 
-    fn on_set_openvpn_proxy(
+    fn on_set_bridge_settings(
         &mut self,
         tx: oneshot::Sender<::std::result::Result<(), settings::Error>>,
-        proxy: Option<openvpn::ProxySettings>,
+        new_settings: BridgeSettings,
     ) {
-        let constraints_result = match proxy {
-            Some(_) => self.apply_proxy_constraints(),
-            _ => Ok(false),
-        };
-        let proxy_result = self.settings.set_openvpn_proxy(proxy);
-
-        match (proxy_result, constraints_result) {
-            (Ok(proxy_changed), Ok(constraints_changed)) => {
-                Self::oneshot_send(tx, Ok(()), "set_openvpn_proxy response");
-                if proxy_changed || constraints_changed {
+        match self.settings.set_bridge_settings(new_settings) {
+            Ok(settings_changes) => {
+                if settings_changes {
                     self.event_listener.notify_settings(self.settings.clone());
-                    info!("Initiating tunnel restart because the OpenVPN proxy setting changed");
                     self.reconnect_tunnel();
-                }
+                };
+                Self::oneshot_send(tx, Ok(()), "set_bridge_settings");
             }
-            (Ok(_), Err(error)) | (Err(error), Ok(_)) => {
-                error!("{}", error.display_chain());
-                Self::oneshot_send(tx, Err(error), "set_openvpn_proxy response");
-            }
-            (Err(error), Err(_)) => {
-                error!("{}", error.display_chain());
-                Self::oneshot_send(tx, Err(error), "set_openvpn_proxy response");
+
+            Err(e) => {
+                log::error!(
+                    "{}",
+                    e.display_chain_with_msg("Failed to set new bridge settings")
+                );
+                Self::oneshot_send(tx, Err(e), "set_bridge_settings");
             }
         }
+    }
+
+    fn on_set_bridge_state(
+        &mut self,
+        tx: oneshot::Sender<::std::result::Result<(), settings::Error>>,
+        bridge_state: BridgeState,
+    ) {
+        let result = match self.settings.set_bridge_state(bridge_state.clone()) {
+            Ok(settings_changed) => {
+                if settings_changed {
+                    if bridge_state == BridgeState::On {
+                        if let Err(e) = self.apply_proxy_constraints() {
+                            log::error!(
+                                "{}",
+                                e.display_chain_with_msg("Failed to apply proxy constraints")
+                            );
+                        }
+                    }
+
+                    self.event_listener.notify_settings(self.settings.clone());
+                    log::info!("Initiating tunnel restart because bridge state changed");
+                    self.reconnect_tunnel();
+                }
+                Ok(())
+            }
+            Err(error) => {
+                log::error!(
+                    "{}",
+                    error.display_chain_with_msg("Failed to set new bridge state")
+                );
+                Err(error)
+            }
+        };
+        Self::oneshot_send(tx, result, "on_set_bridge_state response");
     }
 
     // Set the OpenVPN tunnel to use TCP.

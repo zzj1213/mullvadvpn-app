@@ -1,3 +1,4 @@
+use self::tun_provider::TunProvider;
 use crate::logging;
 #[cfg(not(target_os = "android"))]
 use std::collections::HashMap;
@@ -25,6 +26,9 @@ pub mod tinc;
 
 #[cfg(any(target_os = "linux", target_os = "macos"))]
 pub mod wireguard;
+
+/// A module for low level platform specific tunnel device management.
+pub mod tun_provider;
 
 const OPENVPN_LOG_FILENAME: &str = "openvpn.log";
 
@@ -196,6 +200,7 @@ impl TunnelMonitor {
         log_dir: &Option<PathBuf>,
         resource_dir: &Path,
         on_event: L,
+        tun_provider: &dyn TunProvider,
     ) -> Result<Self>
     where
         L: Fn(TunnelEvent) + Send + Clone + Sync + 'static,
@@ -214,7 +219,7 @@ impl TunnelMonitor {
             }
             #[cfg(any(target_os = "linux", target_os = "macos"))]
             TunnelParameters::Wireguard(config) => {
-                Self::start_wireguard_tunnel(&config, log_file, on_event)
+                Self::start_wireguard_tunnel(&config, log_file, on_event, tun_provider)
             }
             #[cfg(target_os = "android")]
             TunnelParameters::OpenVpn(_) => Err(Error::UnsupportedPlatform),
@@ -228,6 +233,7 @@ impl TunnelMonitor {
         params: &wireguard_types::TunnelParameters,
         log: Option<PathBuf>,
         on_event: L,
+        tun_provider: &dyn TunProvider,
     ) -> Result<Self>
     where
         L: Fn(TunnelEvent) + Send + Sync + Clone + 'static,
@@ -237,6 +243,7 @@ impl TunnelMonitor {
             &config,
             log.as_ref().map(|p| p.as_path()),
             on_event,
+            tun_provider,
         )?;
         Ok(TunnelMonitor {
             monitor: InternalTunnelMonitor::Wireguard(monitor),

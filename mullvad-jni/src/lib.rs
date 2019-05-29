@@ -12,12 +12,14 @@ use crate::{
 };
 use jni::{
     objects::{GlobalRef, JObject, JString},
+    sys::{jboolean, JNI_FALSE, JNI_TRUE},
     JNIEnv,
 };
 use lazy_static::lazy_static;
 use mullvad_daemon::{logging, version, Daemon, DaemonCommandSender};
 use parking_lot::{Mutex, RwLock};
 use std::{collections::HashMap, path::PathBuf, sync::mpsc, thread};
+use talpid_core::tunnel::tun_provider::StubTunProvider;
 use talpid_types::ErrorExt;
 
 const LOG_FILENAME: &str = "daemon.log";
@@ -30,6 +32,7 @@ const CLASSES_TO_LOAD: &[&str] = &[
     "net/mullvad/mullvadvpn/model/LocationConstraint$City",
     "net/mullvad/mullvadvpn/model/LocationConstraint$Country",
     "net/mullvad/mullvadvpn/model/LocationConstraint$Hostname",
+    "net/mullvad/mullvadvpn/model/PublicKey",
     "net/mullvad/mullvadvpn/model/Relay",
     "net/mullvad/mullvadvpn/model/RelayList",
     "net/mullvad/mullvadvpn/model/RelayListCity",
@@ -150,8 +153,9 @@ fn create_daemon(
     let resource_dir = mullvad_paths::get_resource_dir();
     let cache_dir = mullvad_paths::cache_dir().map_err(Error::GetCacheDir)?;
 
-    let daemon = Daemon::start_with_event_listener(
+    let daemon = Daemon::start_with_event_listener_and_tun_provider(
         listener,
+        StubTunProvider,
         Some(log_dir),
         resource_dir,
         cache_dir,
@@ -192,6 +196,26 @@ pub extern "system" fn Java_net_mullvad_mullvadvpn_MullvadDaemon_disconnect(_: J
             "{}",
             error.display_chain_with_msg("Failed to request daemon to disconnect")
         );
+    }
+}
+
+#[no_mangle]
+#[allow(non_snake_case)]
+pub extern "system" fn Java_net_mullvad_mullvadvpn_MullvadDaemon_generateWireguardKey(
+    _: JNIEnv,
+    _: JObject,
+) -> jboolean {
+    let daemon = DAEMON_INTERFACE.lock();
+
+    match daemon.generate_wireguard_key() {
+        Ok(()) => JNI_TRUE,
+        Err(error) => {
+            log::error!(
+                "{}",
+                error.display_chain_with_msg("Failed to generate wireguard key")
+            );
+            JNI_FALSE
+        }
     }
 }
 
@@ -250,6 +274,26 @@ pub extern "system" fn Java_net_mullvad_mullvadvpn_MullvadDaemon_getSettings<'en
         Ok(settings) => settings.into_java(&env),
         Err(error) => {
             log::error!("{}", error.display_chain_with_msg("Failed to get settings"));
+            JObject::null()
+        }
+    }
+}
+
+#[no_mangle]
+#[allow(non_snake_case)]
+pub extern "system" fn Java_net_mullvad_mullvadvpn_MullvadDaemon_getWireguardKey<'env, 'this>(
+    env: JNIEnv<'env>,
+    _: JObject<'this>,
+) -> JObject<'env> {
+    let daemon = DAEMON_INTERFACE.lock();
+
+    match daemon.get_wireguard_key() {
+        Ok(public_key) => public_key.into_java(&env),
+        Err(error) => {
+            log::error!(
+                "{}",
+                error.display_chain_with_msg("Failed to get wireguard key")
+            );
             JObject::null()
         }
     }
