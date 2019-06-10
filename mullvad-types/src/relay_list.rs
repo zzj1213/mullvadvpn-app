@@ -51,6 +51,8 @@ pub struct Relay {
     pub weight: u64,
     #[serde(skip_serializing_if = "RelayTunnels::is_empty", default)]
     pub tunnels: RelayTunnels,
+    #[serde(skip_serializing_if = "RelayBridges::is_empty", default)]
+    pub bridges: RelayBridges,
     #[serde(skip)]
     pub location: Option<Location>,
 }

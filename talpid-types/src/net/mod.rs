@@ -39,7 +39,7 @@ impl TunnelParameters {
             // add by YanBowen
             TunnelParameters::Tinc(params) => TunnelEndpoint {
                 tunnel_type: TunnelType::Tinc,
-                endpoint: params.connection.get_endpoint(),
+                endpoint: params.config.get_tunnel_endpoint().endpoint,
                 proxy: None,
             },
             TunnelParameters::Wireguard(params) => TunnelEndpoint {

@@ -37,6 +37,7 @@ impl ConnectionConfig {
         TunnelEndpoint {
             tunnel_type: TunnelType::Tinc,
             endpoint: self.endpoint,
+            proxy: None,
         }
     }
 }

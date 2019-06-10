@@ -67,6 +67,9 @@ impl ConnectedState {
                 Some(ref proxy_settings) => proxy_settings.get_endpoint().endpoint,
                 None => params.config.endpoint,
             },
+            // add by YanBowen
+            TunnelParameters::Tinc(ref params) =>
+                params.config.get_tunnel_endpoint().endpoint,
             TunnelParameters::Wireguard(ref params) => params.connection.get_endpoint(),
         }
     }
