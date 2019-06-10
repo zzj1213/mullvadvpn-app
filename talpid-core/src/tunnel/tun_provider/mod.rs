@@ -1,7 +1,10 @@
 use cfg_if::cfg_if;
+use ipnetwork::IpNetwork;
 use std::net::IpAddr;
 #[cfg(unix)]
 use std::os::unix::io::AsRawFd;
+#[cfg(target_os = "android")]
+use std::os::unix::io::RawFd;
 use talpid_types::BoxedError;
 
 cfg_if! {
@@ -17,7 +20,7 @@ cfg_if! {
         pub type PlatformTunProvider = UnixTunProvider;
     } else {
         mod stub;
-        pub use self::stub::StubTunProvider;
+        use self::stub::StubTunProvider;
 
         /// Default stub implementation of `TunProvider` for Android and Windows.
         pub type PlatformTunProvider = StubTunProvider;
@@ -31,6 +34,10 @@ cfg_if! {
 pub trait Tun: AsRawFd + Send {
     /// Retrieve the tunnel interface name.
     fn interface_name(&self) -> &str;
+
+    /// Allow a socket to bypass the tunnel.
+    #[cfg(target_os = "android")]
+    fn bypass(&mut self, socket: RawFd) -> Result<(), BoxedError>;
 }
 
 /// Stub tunnel device.
@@ -47,16 +54,17 @@ pub trait TunProvider: Send + 'static {
 }
 
 /// Configuration for creating a tunnel device.
+#[derive(Clone, Debug)]
 pub struct TunConfig {
     /// IP addresses for the tunnel interface.
     pub addresses: Vec<IpAddr>,
-}
 
-impl TunConfig {
-    /// Create a new tunnel device configuration using the specified tunnel addresses.
-    pub fn new(addresses: impl IntoIterator<Item = IpAddr>) -> Self {
-        TunConfig {
-            addresses: addresses.into_iter().collect(),
-        }
-    }
+    /// IP addresses for the DNS servers to use.
+    pub dns_servers: Vec<IpAddr>,
+
+    /// Routes to configure for the tunnel.
+    pub routes: Vec<IpNetwork>,
+
+    /// Maximum Transmission Unit in the tunnel.
+    pub mtu: u16,
 }

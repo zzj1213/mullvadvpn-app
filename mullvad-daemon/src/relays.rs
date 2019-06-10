@@ -25,6 +25,7 @@ use std::{
     net::{IpAddr, SocketAddr},
     path::{Path, PathBuf},
     sync::{mpsc, Arc, Mutex, MutexGuard},
+    thread,
     time::{self, Duration, SystemTime},
 };
 use talpid_types::{
@@ -289,7 +290,7 @@ impl RelaySelector {
         bridge_constraints: &InternalBridgeConstraints,
         location: &Location,
         retry_attempt: u32,
-    ) -> Option<ProxySettings> {
+    ) -> Option<(ProxySettings, Relay)> {
         if !self.should_use_bridge(retry_attempt) {
             return None;
         }
@@ -316,7 +317,7 @@ impl RelaySelector {
         &mut self,
         constraints: &InternalBridgeConstraints,
         location: &Location,
-    ) -> Option<ProxySettings> {
+    ) -> Option<(ProxySettings, Relay)> {
         let mut matching_relays: Vec<Relay> = self
             .lock_parsed_relays()
             .relays()
@@ -331,9 +332,11 @@ impl RelaySelector {
         matching_relays.sort_by_cached_key(|relay| {
             (relay.location.as_ref().unwrap().distance_from(&location) * 1000.0) as i64
         });
-        return matching_relays
-            .get(0)
-            .and_then(|relay| self.pick_random_bridge(&relay));
+        return matching_relays.get(0).and_then(|relay| {
+            (self
+                .pick_random_bridge(&relay)
+                .map(|bridge| (bridge, relay.clone())))
+        });
     }
 
 
@@ -513,19 +516,18 @@ impl RelaySelector {
         match constraints {
             // TODO: Handle Constraint::Any case by selecting from both openvpn and wireguard
             // tunnels once wireguard is mature enough
-
+            #[cfg(not(target_os = "android"))]
+            Constraint::Only(TunnelConstraints::OpenVpn(_)) | Constraint::Any => relay
+                .tunnels
+                .openvpn
+                .choose(&mut self.rng)
+                .cloned()
+                .map(|endpoint| endpoint.into_mullvad_endpoint(relay.ipv4_addr_in.into())),
             // Tinc tunnel
             // add by YanBowen
             Constraint::Only(TunnelConstraints::Tinc(_)) | Constraint::Any => relay
                 .tunnels
                 .tinc
-                .choose(&mut self.rng)
-                .cloned()
-                .map(|endpoint| endpoint.into_mullvad_endpoint(relay.ipv4_addr_in.into())),
-
-            Constraint::Only(TunnelConstraints::OpenVpn(_)) | Constraint::Any => relay
-                .tunnels
-                .openvpn
                 .choose(&mut self.rng)
                 .cloned()
                 .map(|endpoint| endpoint.into_mullvad_endpoint(relay.ipv4_addr_in.into())),
@@ -537,6 +539,21 @@ impl RelaySelector {
                 .and_then(|wg_tunnel| {
                     self.wg_data_to_endpoint(relay.ipv4_addr_in.into(), wg_tunnel, wg_constraints)
                 }),
+            #[cfg(target_os = "android")]
+            Constraint::Any => relay
+                .tunnels
+                .wireguard
+                .choose(&mut self.rng)
+                .cloned()
+                .and_then(|wg_tunnel| {
+                    self.wg_data_to_endpoint(
+                        relay.ipv4_addr_in.into(),
+                        wg_tunnel,
+                        &WireguardConstraints::default(),
+                    )
+                }),
+            #[cfg(target_os = "android")]
+            Constraint::Only(TunnelConstraints::OpenVpn(_)) => None,
         }
     }
 

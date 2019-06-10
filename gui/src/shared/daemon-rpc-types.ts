@@ -12,6 +12,7 @@ export interface ILocation {
   longitude: number;
   mullvadExitIp: boolean;
   hostname?: string;
+  bridgeHostname?: string;
 }
 
 export type BlockReason =
@@ -32,13 +33,42 @@ export type AfterDisconnect = 'nothing' | 'block' | 'reconnect';
 export type TunnelState = 'connecting' | 'connected' | 'disconnecting' | 'disconnected' | 'blocked';
 
 export type TunnelType = 'wireguard' | 'openvpn';
+export function tunnelTypeToString(tunnel: TunnelType): string {
+  switch (tunnel) {
+    case 'wireguard':
+      return 'WireGuard';
+    case 'openvpn':
+      return 'OpenVPN';
+    default:
+      return '';
+  }
+}
 
 export type RelayProtocol = 'tcp' | 'udp';
+
+export type ProxyType = 'shadowsocks' | 'custom';
+export function proxyTypeToString(proxy: ProxyType): string {
+  switch (proxy) {
+    case 'shadowsocks':
+      return 'Shadowsocks';
+    case 'custom':
+      return 'Custom';
+    default:
+      return '';
+  }
+}
 
 export interface ITunnelEndpoint {
   address: string;
   protocol: RelayProtocol;
-  tunnel: TunnelType;
+  tunnelType: TunnelType;
+  proxy?: IProxyEndpoint;
+}
+
+export interface IProxyEndpoint {
+  address: string;
+  protocol: RelayProtocol;
+  proxyType: ProxyType;
 }
 
 export type DaemonEvent =
@@ -160,12 +190,17 @@ export interface IRelayListHostname {
   ipv4AddrIn: string;
   includeInCountry: boolean;
   weight: number;
-  tunnels: IRelayTunnels;
+  tunnels?: IRelayTunnels;
+  bridges?: IRelayBridges;
 }
 
 export interface IRelayTunnels {
   openvpn: IOpenVpnTunnelData[];
   wireguard: IWireguardTunnelData[];
+}
+
+export interface IRelayBridges {
+  shadowsocks: IShadowsocksEndpointData[];
 }
 
 export interface IOpenVpnTunnelData {
@@ -182,10 +217,16 @@ export interface IWireguardTunnelData {
   publicKey: string;
 }
 
+export interface IShadowsocksEndpointData {
+  port: number;
+  cipher: string;
+  password: string;
+  protocol: RelayProtocol;
+}
+
 export interface ITunnelOptions {
   openvpn: {
     mssfix?: number;
-    proxy?: ProxySettings;
   };
   wireguard: {
     mtu?: number;
@@ -233,7 +274,21 @@ export interface ISettings {
   blockWhenDisconnected: boolean;
   relaySettings: RelaySettings;
   tunnelOptions: ITunnelOptions;
+  bridgeSettings: BridgeSettings;
+  bridgeState: BridgeState;
 }
+
+export type BridgeState = 'auto' | 'on' | 'off';
+
+export interface IBridgeConstraints {
+  location:
+    | 'any'
+    | {
+        only: RelayLocation;
+      };
+}
+
+export type BridgeSettings = ProxySettings | IBridgeConstraints;
 
 export interface ISocketAddress {
   host: string;

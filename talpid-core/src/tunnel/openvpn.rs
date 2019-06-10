@@ -454,7 +454,7 @@ impl<C: OpenVpnBuilder + 'static> OpenVpnMonitor<C> {
                 .compat()
                 .map_err(Error::IpRouteNotFound)?,
         );
-        cmd.remote(params.config.get_tunnel_endpoint().endpoint)
+        cmd.remote(params.config.endpoint)
             .user_pass(user_pass_file)
             .tunnel_options(&params.options)
             .enable_ipv6(params.generic_options.enable_ipv6)
@@ -463,6 +463,9 @@ impl<C: OpenVpnBuilder + 'static> OpenVpnMonitor<C> {
         cmd.tunnel_alias(Some(
             crate::winnet::get_tap_interface_alias().map_err(Error::WinnetError)?,
         ));
+        if let Some(proxy_settings) = params.proxy.clone().take() {
+            cmd.proxy_settings(proxy_settings);
+        }
         if let Some(proxy_auth_file) = proxy_auth_file {
             cmd.proxy_auth(proxy_auth_file);
         }

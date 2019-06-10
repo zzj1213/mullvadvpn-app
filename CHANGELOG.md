@@ -33,6 +33,7 @@ Line wrap the file at 100 chars.                                              Th
 - Add missing GUI translations for Czech Republic, USA and UK in the select location view.
 - Add translations for the current location displayed on the main screen in the GUI.
 - Allow a subset of NDP (Router solicitation, router advertisement and redirects) in the firewall.
+- Allow setting proxy mode from UI.
 
 #### Linux
 - Add standard window decorations to the application window.
@@ -54,9 +55,13 @@ Line wrap the file at 100 chars.                                              Th
 
 #### macOS
 - Raise max number of open files for the daemon to 1024. Should prevent threads from panicking.
+- Fix the visual defect that resulted in a semi-transparent grey line rendered above the window.
 
 #### Windows
 - Add better offline detection
+
+#### Linux
+- Fix `systemd-resolved` detection by better compraing `/etc/resolv.conf` symlinks.
 
 
 ## [2019.4] - 2019-05-08

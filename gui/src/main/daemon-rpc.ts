@@ -1,5 +1,6 @@
 import {
   AccountToken,
+  BridgeState,
   DaemonEvent,
   IAccountData,
   IAppVersionInfo,
@@ -40,6 +41,7 @@ const locationSchema = maybe(
     longitude: number,
     mullvad_exit_ip: boolean,
     hostname: maybe(string),
+    bridge_hostname: maybe(string),
   }),
 );
 
@@ -51,6 +53,20 @@ const constraint = <T>(constraintValue: SchemaNode<T>) => {
     }),
   );
 };
+
+const locationConstraintSchema = constraint(
+  oneOf(
+    object({
+      hostname: arrayOf(string),
+    }),
+    object({
+      city: arrayOf(string),
+    }),
+    object({
+      country: string,
+    }),
+  ),
+);
 
 const customTunnelEndpointSchema = oneOf(
   object({
@@ -83,19 +99,7 @@ const customTunnelEndpointSchema = oneOf(
 const relaySettingsSchema = oneOf(
   object({
     normal: partialObject({
-      location: constraint(
-        oneOf(
-          object({
-            hostname: arrayOf(string),
-          }),
-          object({
-            city: arrayOf(string),
-          }),
-          object({
-            country: string,
-          }),
-        ),
-      ),
+      location: locationConstraintSchema,
       tunnel: constraint(
         oneOf(
           object({
@@ -138,20 +142,34 @@ const relayListSchema = partialObject({
               ipv4_addr_in: string,
               include_in_country: boolean,
               weight: number,
-              tunnels: partialObject({
-                openvpn: arrayOf(
-                  partialObject({
-                    port: number,
-                    protocol: string,
-                  }),
-                ),
-                wireguard: arrayOf(
-                  partialObject({
-                    port_ranges: arrayOf(arrayOf(number)),
-                    public_key: string,
-                  }),
-                ),
-              }),
+              bridges: maybe(
+                partialObject({
+                  shadowsocks: arrayOf(
+                    object({
+                      port: number,
+                      cipher: string,
+                      password: string,
+                      protocol: enumeration('tcp', 'udp'),
+                    }),
+                  ),
+                }),
+              ),
+              tunnels: maybe(
+                partialObject({
+                  openvpn: arrayOf(
+                    partialObject({
+                      port: number,
+                      protocol: string,
+                    }),
+                  ),
+                  wireguard: arrayOf(
+                    partialObject({
+                      port_ranges: arrayOf(arrayOf(number)),
+                      public_key: string,
+                    }),
+                  ),
+                }),
+              ),
             }),
           ),
         }),
@@ -189,10 +207,14 @@ const openVpnProxySchema = maybe(
   ),
 );
 
+const bridgeSettingsSchema = oneOf(
+  partialObject({ normal: partialObject({ location: locationConstraintSchema }) }),
+  partialObject({ custom: openVpnProxySchema }),
+);
+
 const tunnelOptionsSchema = partialObject({
   openvpn: partialObject({
     mssfix: maybe(number),
-    proxy: openVpnProxySchema,
   }),
   wireguard: partialObject({
     mtu: maybe(number),
@@ -219,6 +241,13 @@ const tunnelStateTransitionSchema = oneOf(
       address: string,
       protocol: enumeration('tcp', 'udp'),
       tunnel_type: enumeration('wireguard', 'openvpn'),
+      proxy: maybe(
+        partialObject({
+          address: string,
+          protocol: enumeration('tcp', 'udp'),
+          proxy_type: enumeration('shadowsocks', 'custom'),
+        }),
+      ),
     }),
   }),
   object({
@@ -292,6 +321,8 @@ const settingsSchema = partialObject({
   allow_lan: boolean,
   auto_connect: boolean,
   block_when_disconnected: boolean,
+  bridge_settings: bridgeSettingsSchema,
+  bridge_state: enumeration('on', 'auto', 'off'),
   relay_settings: relaySettingsSchema,
   tunnel_options: tunnelOptionsSchema,
 });
@@ -393,6 +424,10 @@ export class DaemonRpc {
 
   public async setBlockWhenDisconnected(blockWhenDisconnected: boolean): Promise<void> {
     await this.transport.send('set_block_when_disconnected', [blockWhenDisconnected]);
+  }
+
+  public async setBridgeState(bridgeState: BridgeState): Promise<void> {
+    await this.transport.send('set_bridge_state', [bridgeState]);
   }
 
   public async setOpenVpnMssfix(mssfix?: number): Promise<void> {

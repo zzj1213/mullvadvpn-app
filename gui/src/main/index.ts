@@ -6,6 +6,7 @@ import * as path from 'path';
 import * as uuid from 'uuid';
 import {
   AccountToken,
+  BridgeState,
   DaemonEvent,
   IAppVersionInfo,
   ILocation,
@@ -26,7 +27,12 @@ import {
   setupLogging,
 } from '../shared/logging';
 import { getOpenAtLogin, setOpenAtLogin } from './autostart';
-import { ConnectionObserver, DaemonRpc, SubscriptionListener } from './daemon-rpc';
+import {
+  ConnectionObserver,
+  DaemonRpc,
+  ResponseParseError,
+  SubscriptionListener,
+} from './daemon-rpc';
 import GuiSettings from './gui-settings';
 import NotificationController from './notification-controller';
 import { resolveBin } from './proc';
@@ -82,13 +88,16 @@ class ApplicationMain {
         tunnel: 'any',
       },
     },
+    bridgeSettings: {
+      location: 'any',
+    },
+    bridgeState: 'auto',
     tunnelOptions: {
       generic: {
         enableIpv6: false,
       },
       openvpn: {
         mssfix: undefined,
-        proxy: undefined,
       },
       wireguard: {
         mtu: undefined,
@@ -236,6 +245,15 @@ class ApplicationMain {
       }
     } else {
       log.info('Cannot close the tunnel because there is no active connection to daemon.');
+    }
+
+    // The window is not closable on macOS to be able to hide the titlebar and workaround
+    // a shadow bug rendered above the invisible title bar. This also prevents the window from
+    // closing normally, even programmatically. Therefore re-enable the close button just before
+    // quitting the app.
+    // Github issue: https://github.com/electron/electron/issues/15008
+    if (process.platform === 'darwin' && this.windowController) {
+      this.windowController.window.setClosable(true);
     }
   }
 
@@ -477,6 +495,10 @@ class ApplicationMain {
       },
       (error: Error) => {
         log.error(`Cannot deserialize the daemon event: ${error.message}`);
+
+        if (error instanceof ResponseParseError && error.validationError) {
+          log.error(error.validationError.message);
+        }
       },
     );
 
@@ -550,10 +572,19 @@ class ApplicationMain {
     // hasToHaveOpenvpn || hasToHaveWg, until then, only filter wireguard
     // relays if tunnel constraints specify wireguard tunnels.
     const hasOpenVpnTunnels = (relay: IRelayListHostname): boolean => {
-      return relay.tunnels.openvpn.length > 0;
+      if (relay.tunnels) {
+        return relay.tunnels.openvpn.length > 0;
+      } else {
+        return false;
+      }
     };
-    const hasWireguardTunnels = (relay: IRelayListHostname): boolean =>
-      relay.tunnels.wireguard.length > 0;
+    const hasWireguardTunnels = (relay: IRelayListHostname): boolean => {
+      if (relay.tunnels) {
+        return relay.tunnels.wireguard.length > 0;
+      } else {
+        return false;
+      }
+    };
     let fnHasWantedTunnels = hasOpenVpnTunnels;
 
     if ('normal' in relaySettings) {
@@ -801,6 +832,9 @@ class ApplicationMain {
     IpcMainEventChannel.settings.handleBlockWhenDisconnected((blockWhenDisconnected: boolean) =>
       this.daemonRpc.setBlockWhenDisconnected(blockWhenDisconnected),
     );
+    IpcMainEventChannel.settings.handleBridgeState((bridgeState: BridgeState) =>
+      this.daemonRpc.setBridgeState(bridgeState),
+    );
     IpcMainEventChannel.settings.handleOpenVpnMssfix((mssfix?: number) =>
       this.daemonRpc.setOpenVpnMssfix(mssfix),
     );
@@ -987,6 +1021,9 @@ class ApplicationMain {
           height: contentHeight + headerBarArrowHeight,
           minHeight: contentHeight + headerBarArrowHeight,
           transparent: true,
+          titleBarStyle: 'customButtonsOnHover',
+          minimizable: false,
+          closable: false,
         });
 
         // make the window visible on all workspaces
