@@ -18,7 +18,10 @@ import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.widget.Button
+import android.widget.ImageButton
 
+import net.mullvad.mullvadvpn.dataproxy.LocationInfoCache
+import net.mullvad.mullvadvpn.model.GeoIpLocation
 import net.mullvad.mullvadvpn.model.TunnelStateTransition
 
 class ConnectFragment : Fragment() {
@@ -26,12 +29,15 @@ class ConnectFragment : Fragment() {
     private lateinit var headerBar: HeaderBar
     private lateinit var notificationBanner: NotificationBanner
     private lateinit var status: ConnectionStatus
+    private lateinit var locationInfo: LocationInfo
 
     private lateinit var parentActivity: MainActivity
+    private lateinit var locationInfoCache: LocationInfoCache
 
     private var daemon = CompletableDeferred<MullvadDaemon>()
     private var vpnPermission = CompletableDeferred<Unit>()
 
+    private var fetchInitialStateJob = fetchInitialState()
     private var generateWireguardKeyJob = generateWireguardKey()
 
     private var activeAction: Job? = null
@@ -43,6 +49,7 @@ class ConnectFragment : Fragment() {
         super.onAttach(context)
 
         parentActivity = context as MainActivity
+        locationInfoCache = parentActivity.locationInfoCache
         waitForDaemonJob = waitForDaemon(parentActivity.asyncDaemon)
     }
 
@@ -53,6 +60,10 @@ class ConnectFragment : Fragment() {
     ): View {
         val view = inflater.inflate(R.layout.connect, container, false)
 
+        view.findViewById<ImageButton>(R.id.settings).setOnClickListener {
+            parentActivity.openSettings()
+        }
+
         view.findViewById<Button>(R.id.switch_location).setOnClickListener {
             openSwitchLocationScreen()
         }
@@ -60,6 +71,7 @@ class ConnectFragment : Fragment() {
         headerBar = HeaderBar(view, context!!)
         notificationBanner = NotificationBanner(view)
         status = ConnectionStatus(view, context!!)
+        locationInfo = LocationInfo(view, locationInfoCache)
 
         actionButton = ConnectActionButton(view)
         actionButton.apply {
@@ -74,11 +86,16 @@ class ConnectFragment : Fragment() {
     }
 
     override fun onDestroyView() {
+        locationInfo.onDestroy()
+
         waitForDaemonJob?.cancel()
         attachListenerJob?.cancel()
+
         detachListener()
+
         generateWireguardKeyJob.cancel()
         updateViewJob?.cancel()
+
         super.onDestroyView()
     }
 
@@ -94,11 +111,23 @@ class ConnectFragment : Fragment() {
     }
 
     private fun attachListener() = GlobalScope.launch(Dispatchers.Default) {
-        daemon.await().onTunnelStateChange = { state -> updateViewJob = updateView(state) }
+        daemon.await().onTunnelStateChange = { state ->
+            synchronized(this@ConnectFragment) {
+                updateViewJob = updateView(state)
+            }
+        }
     }
 
     private fun detachListener() = GlobalScope.launch(Dispatchers.Default) {
         daemon.await().onTunnelStateChange = null
+    }
+
+    private fun fetchInitialState() = GlobalScope.launch(Dispatchers.Default) {
+        val state = daemon.await().getState()
+
+        synchronized(this@ConnectFragment) {
+            updateViewJob = updateViewJob ?: updateView(state)
+        }
     }
 
     private fun generateWireguardKey() = GlobalScope.launch(Dispatchers.Default) {
@@ -136,6 +165,7 @@ class ConnectFragment : Fragment() {
     }
 
     private fun disconnect() {
+        updateView(TunnelStateTransition.Disconnecting())
         activeAction?.cancel()
 
         activeAction = GlobalScope.launch(Dispatchers.Default) {
@@ -159,6 +189,7 @@ class ConnectFragment : Fragment() {
         headerBar.setState(state)
         notificationBanner.setState(state)
         status.setState(state)
+        locationInfoCache.setState(state)
     }
 
     private fun openSwitchLocationScreen() {

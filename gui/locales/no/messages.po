@@ -1,0 +1,581 @@
+msgid ""
+msgstr ""
+"Content-Type: text/plain; charset=UTF-8\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+"X-Generator: crowdin.com\n"
+"X-Crowdin-Project: mullvad-app\n"
+"X-Crowdin-Language: no\n"
+"X-Crowdin-File: messages.pot\n"
+"Project-Id-Version: mullvad-app\n"
+"Last-Translator: adminmullvad\n"
+"Language-Team: Norwegian\n"
+"Language: no_NO\n"
+"PO-Revision-Date: 2019-06-17 08:47\n"
+
+msgid "BLOCKED CONNECTION"
+msgstr "TILKOBLING BLOKKERT"
+
+msgid "CREATING SECURE CONNECTION"
+msgstr "OPPRETTER SIKKER TILKOBLING"
+
+msgid "SECURE CONNECTION"
+msgstr "SIKKER TILKOBLING"
+
+msgid "UNSECURED CONNECTION"
+msgstr "USIKKER TILKOBLING"
+
+#. The remaining time left on the account displayed across the app.
+#. Available placeholders:
+#. %(duration)s - a localized remaining time (in minutes, hours, or days) until the account expiry
+msgctxt "account-expiry"
+msgid "%(duration)s left"
+msgstr "%(duration)s igjen"
+
+#. Back button in navigation bar
+msgctxt "account-nav"
+msgid "Settings"
+msgstr "Innstillinger"
+
+msgctxt "account-view"
+msgid "Account"
+msgstr "Konto"
+
+msgctxt "account-view"
+msgid "Account number"
+msgstr "Kontonummer"
+
+msgctxt "account-view"
+msgid "Buy more credit"
+msgstr "Kjøp mer kreditt"
+
+msgctxt "account-view"
+msgid "COPIED TO CLIPBOARD!"
+msgstr "KOPIERT TIL UTKLIPPSTAVLEN!"
+
+msgctxt "account-view"
+msgid "Currently unavailable"
+msgstr "For øyeblikket utilgjengelig"
+
+msgctxt "account-view"
+msgid "Log out"
+msgstr "Logg ut"
+
+msgctxt "account-view"
+msgid "OUT OF TIME"
+msgstr "TIDEN HAR UTLØPT"
+
+msgctxt "account-view"
+msgid "Paid until"
+msgstr "Betalt fram til"
+
+#. Title label in navigation bar
+msgctxt "advanced-settings-nav"
+msgid "Advanced"
+msgstr "Avansert"
+
+#. Back button in navigation bar
+msgctxt "advanced-settings-nav"
+msgid "Settings"
+msgstr "Innstillinger"
+
+#. The title for the port selector section.
+#. Available placeholders:
+#. %(portType)s - a selected protocol (either TCP or UDP)
+msgctxt "advanced-settings-view"
+msgid "%(portType)s port"
+msgstr "%(portType)s port"
+
+msgctxt "advanced-settings-view"
+msgid "Advanced"
+msgstr "Avansert"
+
+msgctxt "advanced-settings-view"
+msgid "Automatic"
+msgstr "Automatisk"
+
+msgctxt "advanced-settings-view"
+msgid "Block when disconnected"
+msgstr "Blokker når frakoblet"
+
+#. The title for the shadowsocks bridge selector section.
+msgctxt "advanced-settings-view"
+msgid "Bridge mode"
+msgstr "Bromodus"
+
+msgctxt "advanced-settings-view"
+msgid "Default"
+msgstr "Standard"
+
+msgctxt "advanced-settings-view"
+msgid "Enable IPv6"
+msgstr "Aktiver IPv6"
+
+msgctxt "advanced-settings-view"
+msgid "Enable IPv6 communication through the tunnel."
+msgstr "Aktiver IPv6-kommunikasjon gjennom tunnelen."
+
+msgctxt "advanced-settings-view"
+msgid "Mssfix"
+msgstr "Mssfix"
+
+msgctxt "advanced-settings-view"
+msgid "Network protocols"
+msgstr "Nettverksprotokoller"
+
+msgctxt "advanced-settings-view"
+msgid "Off"
+msgstr "Av"
+
+msgctxt "advanced-settings-view"
+msgid "On"
+msgstr "På"
+
+#. The hint displayed below the Mssfix input field.
+#. Available placeholders:
+#. %(max)d - the maximum possible mssfix value
+#. %(min)d - the minimum possible mssfix value
+msgctxt "advanced-settings-view"
+msgid "Set OpenVPN MSS value. Valid range: %(min)d - %(max)d."
+msgstr "Angi OpenVPN MSS-verdi. Verdiområde: %(min)d-%(max)d."
+
+msgctxt "advanced-settings-view"
+msgid "TCP"
+msgstr "TCP"
+
+msgctxt "advanced-settings-view"
+msgid "UDP"
+msgstr "UDP"
+
+msgctxt "advanced-settings-view"
+msgid "Unless connected, always block all network traffic, even when you've disconnected or quit the app."
+msgstr "Blokker all nettverktrafikk når frakoblet, selv når appen er frakoblet eller avsluttet."
+
+msgctxt "auth-failure"
+msgid "Account authentication failed."
+msgstr "Autentisering av konto mislykket."
+
+msgctxt "auth-failure"
+msgid "This account has too many simultaneous connections. Disconnect another device or try connecting again shortly."
+msgstr "Kontoen har for mange simultantilkoblinger. Koble fra en enhet og prøv å koble til."
+
+msgctxt "auth-failure"
+msgid "You have no more VPN time left on this account. Please log in on our website to buy more credit."
+msgstr "Du har ikke mer VPN-tid igjen på kontoen. Logg inn på nettsiden vår for å kjøpe mer kreditt."
+
+msgctxt "auth-failure"
+msgid "You've logged in with an account number that is not valid. Please log out and try another one."
+msgstr "Du har logget inn med et ugyldig kontonummer. Logg ut og prøv med et annet nummer."
+
+#. The selected location label displayed on the main view, when a user selected a specific host to connect to.
+#. Example: Malmö (se-mma-001)
+#. Available placeholders:
+#. %(city)s - a city name
+#. %(hostname)s - a hostname
+msgctxt "connect-container"
+msgid "%(city)s (%(hostname)s)"
+msgstr "%(city)s (%(hostname)s)"
+
+msgctxt "connect-view"
+msgid "Buy more credit"
+msgstr "Kjøp mer kreditt"
+
+msgctxt "connect-view"
+msgid "Disconnect and buy more credit"
+msgstr "Koble fra og kjøp mer kreditt"
+
+msgctxt "connect-view"
+msgid "Out of time"
+msgstr "Tiden har utløpt"
+
+msgctxt "connect-view"
+msgid "You have no more VPN time left on this account. Before you can buy more credit on our website, you first need to turn off the app's \"Block when disconnected\" option under Advanced settings."
+msgstr "Kontoen er tom for VPN-tid. Før du kan kjøpe mer kreditt på nettsiden vår, må du slå av funksjonene \"Blokker når frakoblet\" i appen under avanserte innstillinger."
+
+msgctxt "connect-view"
+msgid "You have no more VPN time left on this account. Please log in on our website to buy more credit."
+msgstr "Du har ikke mer VPN-tid igjen på kontoen. Logg inn på nettsiden vår for å kjøpe mer kreditt."
+
+msgctxt "connect-view"
+msgid "You have no more VPN time left on this account. To buy more credit on our website, you will need to access the Internet with an unsecured connection."
+msgstr "Kontoen er tom for VPN-tid. For å kunne kjøpe kreditt på nettsiden vår må du koble deg til nettet gjennom en usikret tilkobling."
+
+msgctxt "connection-info"
+msgid "In"
+msgstr "Inngående"
+
+msgctxt "connection-info"
+msgid "Out"
+msgstr "Utgående"
+
+msgctxt "error-boundary-view"
+msgid "MULLVAD VPN"
+msgstr "MULLVAD VPN"
+
+#. The message displayed to the user in case of critical error in the GUI
+#. Available placeholders:
+#. %(email)s - support email
+msgctxt "error-boundary-view"
+msgid "Something went wrong. Please contact us at %(email)s"
+msgstr "Det oppstod en feil. Kontakt oss på %(email)s"
+
+msgctxt "headerbar"
+msgid "MULLVAD VPN"
+msgstr "MULLVAD VPN"
+
+msgctxt "in-app-notifications"
+msgid "ACCOUNT CREDIT EXPIRES SOON"
+msgstr "KREDITTEN PÅ KONTOEN UTLØPER SNART"
+
+msgctxt "in-app-notifications"
+msgid "BLOCKING INTERNET"
+msgstr "INTERNETT ER BLOKKERT"
+
+msgctxt "in-app-notifications"
+msgid "Could not configure IPv6, please enable it on your system or disable it in the app"
+msgstr "Kunne ikke konfigurere IPv6. Aktiver det på systemet eller deaktiver det i appen"
+
+msgctxt "in-app-notifications"
+msgid "Failed to apply firewall rules. The device might currently be unsecured"
+msgstr "Kunne ikke anvende brannmurregler. Enheten kan være usikker"
+
+msgctxt "in-app-notifications"
+msgid "Failed to set system DNS server"
+msgstr "Kunne ikke angi systemets DNS-server"
+
+msgctxt "in-app-notifications"
+msgid "Failed to start tunnel connection"
+msgstr "Kunne ikke starte tunneltilkobling"
+
+msgctxt "in-app-notifications"
+msgid "FAILURE - UNSECURED"
+msgstr "FEIL - USIKKER"
+
+msgctxt "in-app-notifications"
+msgid "Inconsistent internal version information, please restart the app"
+msgstr "Inkonsekvent intern informasjon om versjonen. Start appen på nytt"
+
+msgctxt "in-app-notifications"
+msgid "INCONSISTENT VERSION"
+msgstr "INKONSEKVENT VERSJON"
+
+#. The in-app banner displayed to the user when the app update is available.
+#. Available placeholders:
+#. %(version)s - the newest available version of the app
+msgctxt "in-app-notifications"
+msgid "Install Mullvad VPN (%(version)s) to stay up to date"
+msgstr "Installer Mullvad VPN (%(version)s) for å holde deg oppdatert"
+
+msgctxt "in-app-notifications"
+msgid "No relay server matches the current settings"
+msgstr "Ingen relayservere passer til innstillingene"
+
+msgctxt "in-app-notifications"
+msgid "This device is offline, no tunnels can be established"
+msgstr "Enheten er frakoblet. Ingen tunneler kan opprettes"
+
+msgctxt "in-app-notifications"
+msgid "Unable to detect a working TAP adapter on this device. If you've disabled it, enable it again. Otherwise, please reinstall the app"
+msgstr "Kunne ikke finne en fungerende TAP-adapter på enheten. Hvis den er deaktivert, aktiver den. Ellers kan du installere appen på nytt"
+
+msgctxt "in-app-notifications"
+msgid "UNSUPPORTED VERSION"
+msgstr "VERSJON UTEN STØTTE"
+
+msgctxt "in-app-notifications"
+msgid "UPDATE AVAILABLE"
+msgstr "OPPDATERING TILGJENGELIG"
+
+#. The in-app banner displayed to the user when the running app becomes unsupported.
+#. Available placeholders:
+#. %(version)s - the newest available version of the app
+msgctxt "in-app-notifications"
+msgid "You are running an unsupported app version. Please upgrade to %(version)s now to ensure your security"
+msgstr "Du kjører en appversjon som ikke er støttet. Oppdater til %(version)s for å ha den beste sikkerheten"
+
+msgctxt "launch-view"
+msgid "Connecting to Mullvad system service..."
+msgstr "Kobler til Mullvads systemtjeneste ..."
+
+msgctxt "launch-view"
+msgid "MULLVAD VPN"
+msgstr "MULLVAD VPN"
+
+msgctxt "login-view"
+msgid "Checking account number"
+msgstr "Kontrollerer kontonummer"
+
+msgctxt "login-view"
+msgid "Correct account number"
+msgstr "Korrekt kontonummer"
+
+msgctxt "login-view"
+msgid "Create account"
+msgstr "Opprett konto"
+
+msgctxt "login-view"
+msgid "Don't have an account number?"
+msgstr "Har du ikke et kontonummer?"
+
+msgctxt "login-view"
+msgid "Enter your account number"
+msgstr "Skriv inn kontonummeret ditt"
+
+msgctxt "login-view"
+msgid "Logged in"
+msgstr "Du er logget inn"
+
+msgctxt "login-view"
+msgid "Logging in..."
+msgstr "Logger inn ..."
+
+msgctxt "login-view"
+msgid "Login"
+msgstr "Logg inn"
+
+msgctxt "login-view"
+msgid "Login failed"
+msgstr "Kunne ikke logge inn"
+
+msgctxt "login-view"
+msgid "Unknown error"
+msgstr "Ukjent feil"
+
+msgctxt "notifications"
+msgid "Blocked all connections"
+msgstr "Alle tilkoblinger er blokkert"
+
+msgctxt "notifications"
+msgid "Connecting"
+msgstr "Kobler til"
+
+msgctxt "notifications"
+msgid "Critical failure - Unsecured"
+msgstr "Kritisk feil - usikker tilkobling"
+
+msgctxt "notifications"
+msgid "Inconsistent internal version information, please restart the app"
+msgstr "Inkonsekvent intern informasjon om versjonen. Start appen på nytt"
+
+msgctxt "notifications"
+msgid "Reconnecting"
+msgstr "Kobler til på nytt"
+
+msgctxt "notifications"
+msgid "Secured"
+msgstr "Sikker tilkobling"
+
+msgctxt "notifications"
+msgid "Unsecured"
+msgstr "Usikker tilkobling"
+
+#. The system notification displayed to the user when the running app becomes unsupported.
+#. Available placeholder:
+#. %(version) - the newest available version of the app
+msgctxt "notifications"
+msgid "You are running an unsupported app version. Please upgrade to %(version)s now to ensure your security"
+msgstr "Du kjører en appversjon som ikke er støttet. Oppdater til %(version)s for å ha den beste sikkerheten"
+
+#. Title label in navigation bar
+msgctxt "preferences-nav"
+msgid "Preferences"
+msgstr "Preferanser"
+
+#. Back button in navigation bar
+msgctxt "preferences-nav"
+msgid "Settings"
+msgstr "Innstillinger"
+
+msgctxt "preferences-view"
+msgid "Allows access to other devices on the same network for sharing, printing etc."
+msgstr "Gir tilgang til andre enheter på samme nettverk for deling, utskrift osv."
+
+msgctxt "preferences-view"
+msgid "Auto-connect"
+msgstr "Automatisk tilkobling"
+
+msgctxt "preferences-view"
+msgid "Automatically connect to a server when the app launches."
+msgstr "Kobler automatisk til en server når appen starter."
+
+msgctxt "preferences-view"
+msgid "Launch app on start-up"
+msgstr "Kjør app ved oppstart"
+
+msgctxt "preferences-view"
+msgid "Local network sharing"
+msgstr "Deling over lokalt nettverk"
+
+msgctxt "preferences-view"
+msgid "Monochromatic tray icon"
+msgstr "Ensfarget skuffeikon"
+
+msgctxt "preferences-view"
+msgid "Preferences"
+msgstr "Preferanser"
+
+msgctxt "preferences-view"
+msgid "Show only the tray icon when the app starts."
+msgstr "Vis bare skuffeikonet når appen starter."
+
+msgctxt "preferences-view"
+msgid "Start minimized"
+msgstr "Start i minimert tilstand"
+
+msgctxt "preferences-view"
+msgid "Use a monochromatic tray icon instead of a colored one."
+msgstr "Bruk ensfarget skuffeikon i stedet for flerfarget."
+
+#. Title label in navigation bar
+msgctxt "select-location-nav"
+msgid "Select location"
+msgstr "Velg plassering"
+
+msgctxt "select-location-view"
+msgid "Select location"
+msgstr "Velg plassering"
+
+msgctxt "select-location-view"
+msgid "While connected, your real location is masked with a private and secure location in the selected region"
+msgstr "Mens du er tilkoblet vil din egentlige plassering være skjult med en privat og sikker plassering i den valgte regionen"
+
+msgctxt "settings-view"
+msgid "Account"
+msgstr "Konto"
+
+msgctxt "settings-view"
+msgid "Advanced"
+msgstr "Avansert"
+
+msgctxt "settings-view"
+msgid "App version"
+msgstr "Appversjon"
+
+msgctxt "settings-view"
+msgid "FAQs & Guides"
+msgstr "Ofte stilte spørsmål og veiledninger"
+
+msgctxt "settings-view"
+msgid "Inconsistent internal version information, please restart the app."
+msgstr "Inkonsekvent intern informasjon om versjonen. Start appen på nytt."
+
+msgctxt "settings-view"
+msgid "OUT OF TIME"
+msgstr "TIDEN HAR UTLØPT"
+
+msgctxt "settings-view"
+msgid "Preferences"
+msgstr "Preferanser"
+
+msgctxt "settings-view"
+msgid "Quit app"
+msgstr "Lukk app"
+
+msgctxt "settings-view"
+msgid "Report a problem"
+msgstr "Rapporter et problem"
+
+msgctxt "settings-view"
+msgid "Settings"
+msgstr "Innstillinger"
+
+msgctxt "settings-view"
+msgid "Update available, download to remain safe."
+msgstr "Oppdatering tilgjengelig. Last ned for å oppdatere sikkerheten."
+
+#. Title label in navigation bar
+msgctxt "settings-view-nav"
+msgid "Settings"
+msgstr "Innstillinger"
+
+#. Back button in navigation bar
+msgctxt "support-nav"
+msgid "Settings"
+msgstr "Innstillinger"
+
+msgctxt "support-view"
+msgid "Back"
+msgstr "Tilbake"
+
+msgctxt "support-view"
+msgid "Describe your problem"
+msgstr "Beskriv problemet"
+
+msgctxt "support-view"
+msgid "Edit message"
+msgstr "Rediger melding"
+
+msgctxt "support-view"
+msgid "Failed to send"
+msgstr "Kunne ikke sende"
+
+#. The message displayed to the user after submitting the problem report, given that the user left his or her email for us to reach back.
+#. Available placeholders:
+#. %(email)s
+msgctxt "support-view"
+msgid "If needed we will contact you on %(email)s"
+msgstr "Vi vil kontakte deg på %(email)s ved behov"
+
+msgctxt "support-view"
+msgid "Report a problem"
+msgstr "Rapporter et problem"
+
+msgctxt "support-view"
+msgid "Send"
+msgstr "Send"
+
+msgctxt "support-view"
+msgid "Send anyway"
+msgstr "Send allikevel"
+
+msgctxt "support-view"
+msgid "Sending..."
+msgstr "Sender ..."
+
+msgctxt "support-view"
+msgid "Sent"
+msgstr "Sendt"
+
+msgctxt "support-view"
+msgid "Thanks! We will look into this."
+msgstr "Takk! Dette skal vi følge opp."
+
+msgctxt "support-view"
+msgid "To help you more effectively, your app's log file will be attached to this message. Your data will remain secure and private, as it is anonymised before being sent over an encrypted channel."
+msgstr "For å kunne gi deg god nok hjelp vil loggfilen til appen ligge som vedlegg til meldingen. All data forblir beskyttet og privat gjennom anonymisering før det sendes gjennom en kryptert kanal."
+
+msgctxt "support-view"
+msgid "Try again"
+msgstr "Prøv på nytt"
+
+msgctxt "support-view"
+msgid "View app logs"
+msgstr "Se applogger"
+
+msgctxt "support-view"
+msgid "You are about to send the problem report without a way for us to get back to you. If you want an answer to your report you will have to enter an email address."
+msgstr "Problemrapporten blir nå sendt uten en måte for oss å kontakte deg på. Hvis du ønsker svar på rapporten, må du oppgi en e-postadresse."
+
+msgctxt "support-view"
+msgid "You may need to go back to the app's main screen and click Disconnect before trying again. Don't worry, the information you entered will remain in the form."
+msgstr "Du må gå tilbake til hovedskjermen til appen og trykke på \"Koble fra\" før du kan prøve på nytt. Men det er ingen grunn til bekymring, informasjonen du har skrevet i skjemaet blir ikke borte."
+
+msgctxt "support-view"
+msgid "Your email (optional)"
+msgstr "E-post (valgfritt)"
+
+msgctxt "tunnel-control"
+msgid "Cancel"
+msgstr "Avbryt"
+
+msgctxt "tunnel-control"
+msgid "Disconnect"
+msgstr "Koble fra"
+
+msgctxt "tunnel-control"
+msgid "Secure my connection"
+msgstr "Gjør tilkoblingen sikker"
+
+msgctxt "tunnel-control"
+msgid "Switch location"
+msgstr "Bytt plassering"
+

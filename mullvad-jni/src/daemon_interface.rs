@@ -1,10 +1,11 @@
 use futures::{sync::oneshot, Future};
 use mullvad_daemon::{DaemonCommandSender, ManagementCommand};
 use mullvad_types::{
-    account::AccountData, relay_constraints::RelaySettingsUpdate, relay_list::RelayList,
-    settings::Settings, states::TargetState,
+    account::AccountData, location::GeoIpLocation, relay_constraints::RelaySettingsUpdate,
+    relay_list::RelayList, settings::Settings, states::TargetState,
 };
-use talpid_types::net::wireguard;
+use parking_lot::Mutex;
+use talpid_types::{net::wireguard, tunnel::TunnelStateTransition};
 
 #[derive(Debug, err_derive::Error)]
 pub enum Error {
@@ -24,18 +25,20 @@ pub enum Error {
 type Result<T> = std::result::Result<T, Error>;
 
 pub struct DaemonInterface {
-    command_sender: Option<DaemonCommandSender>,
+    command_sender: Mutex<Option<DaemonCommandSender>>,
 }
 
 impl DaemonInterface {
     pub fn new() -> Self {
         DaemonInterface {
-            command_sender: None,
+            command_sender: Mutex::new(None),
         }
     }
 
-    pub fn set_command_sender(&mut self, sender: DaemonCommandSender) {
-        self.command_sender = Some(sender);
+    pub fn set_command_sender(&self, sender: DaemonCommandSender) {
+        let mut command_sender = self.command_sender.lock();
+
+        *command_sender = Some(sender);
     }
 
     pub fn connect(&self) -> Result<()> {
@@ -82,6 +85,14 @@ impl DaemonInterface {
             .map_err(Error::RpcError)
     }
 
+    pub fn get_current_location(&self) -> Result<Option<GeoIpLocation>> {
+        let (tx, rx) = oneshot::channel();
+
+        self.send_command(ManagementCommand::GetCurrentLocation(tx))?;
+
+        Ok(rx.wait().map_err(|_| Error::NoResponse)?)
+    }
+
     pub fn get_relay_locations(&self) -> Result<RelayList> {
         let (tx, rx) = oneshot::channel();
 
@@ -94,6 +105,14 @@ impl DaemonInterface {
         let (tx, rx) = oneshot::channel();
 
         self.send_command(ManagementCommand::GetSettings(tx))?;
+
+        Ok(rx.wait().map_err(|_| Error::NoResponse)?)
+    }
+
+    pub fn get_state(&self) -> Result<TunnelStateTransition> {
+        let (tx, rx) = oneshot::channel();
+
+        self.send_command(ManagementCommand::GetState(tx))?;
 
         Ok(rx.wait().map_err(|_| Error::NoResponse)?)
     }
@@ -123,7 +142,8 @@ impl DaemonInterface {
     }
 
     fn send_command(&self, command: ManagementCommand) -> Result<()> {
-        let sender = self.command_sender.as_ref().ok_or(Error::NoSender)?;
+        let locked_sender = self.command_sender.lock();
+        let sender = locked_sender.as_ref().ok_or(Error::NoSender)?;
 
         sender.send(command).map_err(Error::NoDaemon)
     }

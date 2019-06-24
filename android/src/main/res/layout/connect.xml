@@ -19,6 +19,7 @@
                 android:layout_width="49dp"
                 android:layout_height="50dp"
                 android:src="@drawable/logo_icon"
+                android:layout_weight="0"
                 />
         <TextView
                 android:layout_width="wrap_content"
@@ -29,6 +30,19 @@
                 android:textStyle="bold"
                 android:text="@string/app_name"
                 android:textAllCaps="true"
+                android:layout_weight="0"
+                />
+        <View
+                android:layout_width="0dp"
+                android:layout_height="0dp"
+                android:layout_weight="1"
+                />
+        <ImageButton android:id="@+id/settings"
+                android:layout_width="24dp"
+                android:layout_height="24dp"
+                android:background="?android:attr/selectableItemBackground"
+                android:src="@drawable/icon_settings"
+                android:layout_weight="0"
                 />
     </LinearLayout>
 
@@ -96,31 +110,29 @@
                 android:text="@string/unsecured_connection"
                 android:textAllCaps="true"
                 />
-        <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:textColor="@color/white"
-                android:textSize="34sp"
-                android:textStyle="bold"
-                android:text="@string/country"
-                />
-        <TextView
+        <TextView android:id="@+id/country"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:textColor="@color/white"
                 android:textSize="34sp"
                 android:textStyle="bold"
                 android:text=""
-                android:visibility="invisible"
                 />
-        <TextView
+        <TextView android:id="@+id/city"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textColor="@color/white"
+                android:textSize="34sp"
+                android:textStyle="bold"
+                android:text=""
+                />
+        <TextView android:id="@+id/hostname"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:textColor="@color/white"
                 android:textSize="16sp"
                 android:textStyle="bold"
                 android:text=""
-                android:visibility="invisible"
                 />
     </LinearLayout>
 

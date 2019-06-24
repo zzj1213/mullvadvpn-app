@@ -258,9 +258,14 @@ impl RelaySelector {
         // any constraints that are explicitly specified.
         let tunnel_constraints = match original_constraints.tunnel {
             // No constraints, we use our preferred ones.
+            #[cfg(not(target_os = "android"))]
             Constraint::Any => TunnelConstraints::OpenVpn(OpenVpnConstraints {
                 port: preferred_port,
                 protocol: Constraint::Only(preferred_protocol),
+            }),
+            #[cfg(target_os = "android")]
+            Constraint::Any => TunnelConstraints::Wireguard(WireguardConstraints {
+                port: Constraint::Any,
             }),
             Constraint::Only(TunnelConstraints::OpenVpn(ref openvpn_constraints)) => {
                 match openvpn_constraints {
@@ -296,7 +301,7 @@ impl RelaySelector {
         }
 
         // For now, only TCP tunnels are supported.
-        if let &Constraint::Only(TransportProtocol::Udp) = &bridge_constraints.transport_protocol {
+        if let Constraint::Only(TransportProtocol::Udp) = bridge_constraints.transport_protocol {
             return None;
         }
 
@@ -325,18 +330,18 @@ impl RelaySelector {
             .filter_map(|relay| Self::matching_bridge_relay(relay, constraints))
             .collect();
 
-        if matching_relays.len() == 0 {
+        if matching_relays.is_empty() {
             return None;
         }
 
         matching_relays.sort_by_cached_key(|relay| {
             (relay.location.as_ref().unwrap().distance_from(&location) * 1000.0) as i64
         });
-        return matching_relays.get(0).and_then(|relay| {
+        matching_relays.get(0).and_then(|relay| {
             (self
                 .pick_random_bridge(&relay)
                 .map(|bridge| (bridge, relay.clone())))
-        });
+        })
     }
 
 
@@ -374,7 +379,7 @@ impl RelaySelector {
             Constraint::Any => relay.clone(),
             Constraint::Only(ref tunnel_constraints) => {
                 let mut relay = relay.clone();
-                relay.tunnels = Self::matching_tunnels(&mut relay.tunnels, tunnel_constraints);
+                relay.tunnels = Self::matching_tunnels(&relay.tunnels, tunnel_constraints);
                 relay
             }
         };
@@ -435,7 +440,7 @@ impl RelaySelector {
             .bridges
             .shadowsocks
             .retain(|bridge| constraints.transport_protocol.matches(&bridge.protocol));
-        if filtered_relay.bridges.shadowsocks.len() == 0 {
+        if filtered_relay.bridges.shadowsocks.is_empty() {
             return None;
         }
 
@@ -598,7 +603,7 @@ impl RelaySelector {
                     if port_index < ports_in_range {
                         return Some(port_index as u16 + range.0);
                     }
-                    port_index = port_index - ports_in_range;
+                    port_index -= ports_in_range;
                 }
                 panic!("Port selection algorithm is broken")
             }

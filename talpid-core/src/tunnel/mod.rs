@@ -9,7 +9,7 @@ use std::{
 };
 #[cfg(not(target_os = "android"))]
 use talpid_types::net::openvpn as openvpn_types;
-#[cfg(any(target_os = "linux", target_os = "macos"))]
+#[cfg(any(target_os = "android", target_os = "linux", target_os = "macos"))]
 use talpid_types::net::wireguard as wireguard_types;
 use talpid_types::net::{GenericTunnelOptions, TunnelParameters};
 
@@ -24,7 +24,7 @@ pub mod openvpn;
 /// A module for all Tinc related tunnel management.
 pub mod tinc;
 
-#[cfg(any(target_os = "linux", target_os = "macos"))]
+#[cfg(any(target_os = "android", target_os = "linux", target_os = "macos"))]
 pub mod wireguard;
 
 /// A module for low level platform specific tunnel device management.
@@ -55,7 +55,7 @@ pub enum Error {
     RotateLogError(#[error(cause)] crate::logging::RotateLogError),
 
     /// Failure to build Wireguard configuration.
-    #[cfg(any(target_os = "linux", target_os = "macos"))]
+    #[cfg(any(target_os = "android", target_os = "linux", target_os = "macos"))]
     #[error(display = "Failed to configure Wireguard with the given parameters")]
     WireguardConfigError(#[error(cause)] self::wireguard::config::Error),
 
@@ -70,7 +70,7 @@ pub enum Error {
     TincTunnelMonitoringError(#[error(cause)] tinc::Error),
 
     /// There was an error listening for events from the Wireguard tunnel
-    #[cfg(any(target_os = "linux", target_os = "macos"))]
+    #[cfg(any(target_os = "android", target_os = "linux", target_os = "macos"))]
     #[error(display = "Failed while listening for events from the Wireguard tunnel")]
     WirguardTunnelMonitoringError(#[error(cause)] wireguard::Error),
 }
@@ -213,22 +213,25 @@ impl TunnelMonitor {
             TunnelParameters::OpenVpn(config) => {
                 Self::start_openvpn_tunnel(&config, log_file, resource_dir, on_event)
             }
+
+            #[cfg(target_os = "android")]
+            TunnelParameters::OpenVpn(_) => Err(Error::UnsupportedPlatform),
+
             // add by YanBowen
+            #[cfg(not(target_os = "android"))]
             TunnelParameters::Tinc(config) => {
                 Self::start_tinc_tunnel(&config, log_file, resource_dir, on_event)
             }
-            #[cfg(any(target_os = "linux", target_os = "macos"))]
+            #[cfg(any(target_os = "android", target_os = "linux", target_os = "macos"))]
             TunnelParameters::Wireguard(config) => {
                 Self::start_wireguard_tunnel(&config, log_file, on_event, tun_provider)
             }
-            #[cfg(target_os = "android")]
-            TunnelParameters::OpenVpn(_) => Err(Error::UnsupportedPlatform),
-            #[cfg(any(windows, target_os = "android"))]
+            #[cfg(windows)]
             TunnelParameters::Wireguard(_) => Err(Error::UnsupportedPlatform),
         }
     }
 
-    #[cfg(any(target_os = "linux", target_os = "macos"))]
+    #[cfg(any(target_os = "android", target_os = "linux", target_os = "macos"))]
     fn start_wireguard_tunnel<L>(
         params: &wireguard_types::TunnelParameters,
         log: Option<PathBuf>,
@@ -332,7 +335,8 @@ pub enum CloseHandle {
     // add by YanBowen
     /// Tinc close handle
     Tinc(tinc::TincCloseHandle),
-    #[cfg(any(target_os = "linux", target_os = "macos"))]
+
+    #[cfg(any(target_os = "android", target_os = "linux", target_os = "macos"))]
     /// Wireguard close handle
     Wireguard(wireguard::CloseHandle),
 }
@@ -340,14 +344,11 @@ pub enum CloseHandle {
 impl CloseHandle {
     /// Closes the underlying tunnel, making the `TunnelMonitor::wait` method return.
     pub fn close(self) -> io::Result<()> {
-        #[cfg(target_os = "android")]
-        unimplemented!();
-
-        #[cfg(not(target_os = "android"))]
         match self {
+            #[cfg(not(target_os = "android"))]
             CloseHandle::OpenVpn(handle) => handle.close(),
             CloseHandle::Tinc(handle) => handle.close(),
-            #[cfg(any(target_os = "linux", target_os = "macos"))]
+            #[cfg(any(target_os = "android", target_os = "linux", target_os = "macos"))]
             CloseHandle::Wireguard(mut handle) => {
                 handle.close();
                 Ok(())
@@ -361,28 +362,25 @@ enum InternalTunnelMonitor {
     OpenVpn(openvpn::OpenVpnMonitor),
     // add by YanBowen
     Tinc(tinc::TincMonitor),
-    #[cfg(any(target_os = "linux", target_os = "macos"))]
+    #[cfg(any(target_os = "android", target_os = "linux", target_os = "macos"))]
     Wireguard(wireguard::WireguardMonitor),
 }
 
 impl InternalTunnelMonitor {
     fn close_handle(&self) -> CloseHandle {
-        #[cfg(not(target_os = "android"))]
         match self {
+            #[cfg(not(target_os = "android"))]
             InternalTunnelMonitor::OpenVpn(tun) => CloseHandle::OpenVpn(tun.close_handle()),
             // add by YanBowen
             InternalTunnelMonitor::Tinc(tun) => CloseHandle::Tinc(tun.close_handle()),
-            #[cfg(any(target_os = "linux", target_os = "macos"))]
+            #[cfg(any(target_os = "android", target_os = "linux", target_os = "macos"))]
             InternalTunnelMonitor::Wireguard(tun) => CloseHandle::Wireguard(tun.close_handle()),
         }
-
-        #[cfg(target_os = "android")]
-        unimplemented!();
     }
 
     fn wait(self) -> Result<()> {
-        #[cfg(not(target_os = "android"))]
         match self {
+            #[cfg(not(target_os = "android"))]
             InternalTunnelMonitor::OpenVpn(tun) => tun.wait()?,
             // add by YanBowen
             InternalTunnelMonitor::Tinc(tun) => tun.wait()?,

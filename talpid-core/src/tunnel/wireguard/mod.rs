@@ -44,6 +44,11 @@ pub enum Error {
     #[error(display = "Invalid tunnel interface name")]
     InterfaceNameError(#[error(cause)] std::ffi::NulError),
 
+    /// Failed to configure Wireguard sockets to bypass the tunnel.
+    #[cfg(target_os = "android")]
+    #[error(display = "Failed to configure Wireguard sockets to bypass the tunnel")]
+    BypassError(#[error(cause)] BoxedError),
+
     /// Pinging timed out.
     #[error(display = "Ping timed out")]
     PingTimeoutError,
@@ -170,10 +175,7 @@ impl WireguardMonitor {
 
         // route endpoints with specific routes
         for peer in config.peers.iter() {
-            routes.insert(
-                peer.endpoint.ip().into(),
-                routing::NetNode::DefaultNode.into(),
-            );
+            routes.insert(peer.endpoint.ip().into(), routing::NetNode::DefaultNode);
         }
 
         routes

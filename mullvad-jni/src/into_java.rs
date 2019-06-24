@@ -3,11 +3,12 @@ use ipnetwork::IpNetwork;
 use jni::{
     objects::{JList, JObject, JString, JValue},
     signature::JavaType,
-    sys::{jint, jshort, jsize},
+    sys::{jboolean, jint, jshort, jsize},
     JNIEnv,
 };
 use mullvad_types::{
     account::AccountData,
+    location::GeoIpLocation,
     relay_constraints::{Constraint, LocationConstraint, RelayConstraints, RelaySettings},
     relay_list::{Relay, RelayList, RelayListCity, RelayListCountry},
     settings::Settings,
@@ -196,10 +197,45 @@ impl<'env> IntoJava<'env> for TunConfig {
     fn into_java(self, env: &JNIEnv<'env>) -> Self::JavaType {
         let class = get_class("net/mullvad/mullvadvpn/model/TunConfig");
         let addresses = env.auto_local(self.addresses.into_java(env));
-        let parameters = [JValue::Object(addresses.as_obj())];
+        let dns_servers = env.auto_local(self.dns_servers.into_java(env));
+        let routes = env.auto_local(self.routes.into_java(env));
+        let mtu = self.mtu as jint;
+        let parameters = [
+            JValue::Object(addresses.as_obj()),
+            JValue::Object(dns_servers.as_obj()),
+            JValue::Object(routes.as_obj()),
+            JValue::Int(mtu),
+        ];
 
-        env.new_object(&class, "(Ljava/util/List;)V", &parameters)
-            .expect("Failed to create TunConfig Java object")
+        env.new_object(
+            &class,
+            "(Ljava/util/List;Ljava/util/List;Ljava/util/List;I)V",
+            &parameters,
+        )
+        .expect("Failed to create TunConfig Java object")
+    }
+}
+
+impl<'env> IntoJava<'env> for GeoIpLocation {
+    type JavaType = JObject<'env>;
+
+    fn into_java(self, env: &JNIEnv<'env>) -> Self::JavaType {
+        let class = get_class("net/mullvad/mullvadvpn/model/GeoIpLocation");
+        let country = env.auto_local(JObject::from(self.country.into_java(env)));
+        let city = env.auto_local(JObject::from(self.city.into_java(env)));
+        let hostname = env.auto_local(JObject::from(self.hostname.into_java(env)));
+        let parameters = [
+            JValue::Object(country.as_obj()),
+            JValue::Object(city.as_obj()),
+            JValue::Object(hostname.as_obj()),
+        ];
+
+        env.new_object(
+            &class,
+            "(Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)V",
+            &parameters,
+        )
+        .expect("Failed to create GeoIpLocation Java object")
     }
 }
 
@@ -268,9 +304,13 @@ impl<'env> IntoJava<'env> for Relay {
     fn into_java(self, env: &JNIEnv<'env>) -> Self::JavaType {
         let class = get_class("net/mullvad/mullvadvpn/model/Relay");
         let hostname = env.auto_local(JObject::from(self.hostname.into_java(env)));
-        let parameters = [JValue::Object(hostname.as_obj())];
+        let has_wireguard_tunnels = (!self.tunnels.wireguard.is_empty()) as jboolean;
+        let parameters = [
+            JValue::Object(hostname.as_obj()),
+            JValue::Bool(has_wireguard_tunnels),
+        ];
 
-        env.new_object(&class, "(Ljava/lang/String;)V", &parameters)
+        env.new_object(&class, "(Ljava/lang/String;Z)V", &parameters)
             .expect("Failed to create Relay Java object")
     }
 }

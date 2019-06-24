@@ -10,7 +10,7 @@ use crate::relay_list::{OpenVpnEndpointData, WireguardEndpointData};
 // add by YanBowen
 use crate::relay_list::TincEndpointData;
 
-/// Contains server data needed to conenct to a single mullvad endpoint
+/// Contains server data needed to connect to a single mullvad endpoint
 #[derive(Debug, Clone)]
 pub enum MullvadEndpoint {
     OpenVpn(Endpoint),
@@ -29,15 +29,9 @@ impl MullvadEndpoint {
     pub fn to_endpoint(&self) -> Endpoint {
         match self {
             MullvadEndpoint::OpenVpn(endpoint) => *endpoint,
-
             // add by YanBowen
             MullvadEndpoint::Tinc(endpoint) => *endpoint,
-
-            MullvadEndpoint::Wireguard {
-                peer,
-                ipv4_gateway: _,
-                ipv6_gateway: _,
-            } => Endpoint::new(
+            MullvadEndpoint::Wireguard { peer, .. } => Endpoint::new(
                 peer.endpoint.ip(),
                 peer.endpoint.port(),
                 TransportProtocol::Udp,
