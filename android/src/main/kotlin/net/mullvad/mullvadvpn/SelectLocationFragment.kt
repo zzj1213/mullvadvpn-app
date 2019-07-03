@@ -16,6 +16,7 @@ import android.view.ViewGroup
 import android.widget.ImageButton
 import android.widget.ViewSwitcher
 
+import net.mullvad.mullvadvpn.dataproxy.ConnectionProxy
 import net.mullvad.mullvadvpn.dataproxy.RelayListListener
 import net.mullvad.mullvadvpn.model.Constraint
 import net.mullvad.mullvadvpn.model.LocationConstraint
@@ -27,6 +28,7 @@ import net.mullvad.mullvadvpn.relaylist.RelayListAdapter
 
 class SelectLocationFragment : Fragment() {
     private lateinit var parentActivity: MainActivity
+    private lateinit var connectionProxy: ConnectionProxy
     private lateinit var relayListListener: RelayListListener
 
     private lateinit var relayListContainer: ViewSwitcher
@@ -37,8 +39,8 @@ class SelectLocationFragment : Fragment() {
 
     init {
         relayListAdapter.onSelect = { relayItem ->
-            relayListListener.selectedRelayItem = relayItem
-            updateLocationConstraint()
+            updateLocationConstraint(relayItem)
+            connectionProxy.connect()
             close()
         }
     }
@@ -47,11 +49,8 @@ class SelectLocationFragment : Fragment() {
         super.onAttach(context)
 
         parentActivity = context as MainActivity
+        connectionProxy = parentActivity.connectionProxy
         relayListListener = parentActivity.relayListListener
-
-        relayListListener.onRelayListChange = { relayList, selectedItem ->
-            updateRelayListJob = updateRelayList(relayList, selectedItem)
-        }
     }
 
     override fun onCreateView(
@@ -69,6 +68,20 @@ class SelectLocationFragment : Fragment() {
         configureRelayList(view.findViewById<RecyclerView>(R.id.relay_list))
 
         return view
+    }
+
+    override fun onResume() {
+        super.onResume()
+
+        relayListListener.onRelayListChange = { relayList, selectedItem ->
+            updateRelayListJob = updateRelayList(relayList, selectedItem)
+        }
+    }
+
+    override fun onPause() {
+        relayListListener.onRelayListChange = null
+
+        super.onPause()
     }
 
     override fun onDestroyView() {
@@ -90,10 +103,12 @@ class SelectLocationFragment : Fragment() {
         }
     }
 
-    private fun updateLocationConstraint() = GlobalScope.launch(Dispatchers.Default) {
-        val constraint = relayListListener.selectedRelayLocation
+    private fun updateLocationConstraint(relayItem: RelayItem?) =
+            GlobalScope.launch(Dispatchers.Default) {
+        val constraint: Constraint<LocationConstraint> =
+            relayItem?.run { Constraint.Only(location) } ?: Constraint.Any()
 
-        parentActivity.asyncDaemon.await().updateRelaySettings(
+        parentActivity.daemon.await().updateRelaySettings(
             RelaySettingsUpdate.RelayConstraintsUpdate(constraint)
         )
     }

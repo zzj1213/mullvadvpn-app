@@ -13,7 +13,7 @@ import {
   IRelayList,
   ISettings,
   RelaySettingsUpdate,
-  TunnelStateTransition,
+  TunnelState,
 } from './daemon-rpc-types';
 
 export interface IAppStateSnapshot {
@@ -21,7 +21,7 @@ export interface IAppStateSnapshot {
   isConnected: boolean;
   autoStart: boolean;
   accountHistory: AccountToken[];
-  tunnelState: TunnelStateTransition;
+  tunnelState: TunnelState;
   settings: ISettings;
   location?: ILocation;
   relays: IRelayList;
@@ -42,12 +42,12 @@ interface IReceiver<T> {
   listen(fn: (value: T) => void): void;
 }
 
-interface ITunnelMethods extends IReceiver<TunnelStateTransition> {
+interface ITunnelMethods extends IReceiver<TunnelState> {
   connect(): Promise<void>;
   disconnect(): Promise<void>;
 }
 
-interface ITunnelHandlers extends ISender<TunnelStateTransition> {
+interface ITunnelHandlers extends ISender<TunnelState> {
   handleConnect(fn: () => Promise<void>): void;
   handleDisconnect(fn: () => Promise<void>): void;
 }
@@ -71,12 +71,14 @@ interface ISettingsHandlers extends ISender<ISettings> {
 }
 
 interface IGuiSettingsMethods extends IReceiver<IGuiSettingsState> {
+  setEnableSystemNotifications(flag: boolean): void;
   setAutoConnect(autoConnect: boolean): void;
   setStartMinimized(startMinimized: boolean): void;
   setMonochromaticIcon(monochromaticIcon: boolean): void;
 }
 
 interface IGuiSettingsHandlers extends ISender<IGuiSettingsState> {
+  handleEnableSystemNotifications(fn: (flag: boolean) => void): void;
   handleAutoConnect(fn: (autoConnect: boolean) => void): void;
   handleStartMinimized(fn: (startMinimized: boolean) => void): void;
   handleMonochromaticIcon(fn: (monochromaticIcon: boolean) => void): void;
@@ -133,6 +135,7 @@ const CURRENT_VERSION_CHANGED = 'current-version-changed';
 const UPGRADE_VERSION_CHANGED = 'upgrade-version-changed';
 
 const GUI_SETTINGS_CHANGED = 'gui-settings-changed';
+const SET_ENABLE_SYSTEM_NOTIFICATIONS = 'set-enable-system-notifications';
 const SET_AUTO_CONNECT = 'set-auto-connect';
 const SET_MONOCHROMATIC_ICON = 'set-monochromatic-icon';
 const SET_START_MINIMIZED = 'set-start-minimized';
@@ -204,6 +207,7 @@ export class IpcRendererEventChannel {
 
   public static guiSettings: IGuiSettingsMethods = {
     listen: listen(GUI_SETTINGS_CHANGED),
+    setEnableSystemNotifications: set(SET_ENABLE_SYSTEM_NOTIFICATIONS),
     setAutoConnect: set(SET_AUTO_CONNECT),
     setMonochromaticIcon: set(SET_MONOCHROMATIC_ICON),
     setStartMinimized: set(SET_START_MINIMIZED),
@@ -277,6 +281,7 @@ export class IpcMainEventChannel {
 
   public static guiSettings: IGuiSettingsHandlers = {
     notify: sender(GUI_SETTINGS_CHANGED),
+    handleEnableSystemNotifications: handler(SET_ENABLE_SYSTEM_NOTIFICATIONS),
     handleAutoConnect: handler(SET_AUTO_CONNECT),
     handleMonochromaticIcon: handler(SET_MONOCHROMATIC_ICON),
     handleStartMinimized: handler(SET_START_MINIMIZED),

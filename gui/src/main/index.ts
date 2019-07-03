@@ -15,7 +15,7 @@ import {
   ISettings,
   RelaySettings,
   RelaySettingsUpdate,
-  TunnelStateTransition,
+  TunnelState,
 } from '../shared/daemon-rpc-types';
 import { loadTranslations, messages } from '../shared/gettext';
 import { IpcMainEventChannel } from '../shared/ipc-event-channel';
@@ -73,7 +73,7 @@ class ApplicationMain {
   private quitStage = AppQuitStage.unready;
 
   private accountHistory: AccountToken[] = [];
-  private tunnelState: TunnelStateTransition = { state: 'disconnected' };
+  private tunnelState: TunnelState = { state: 'disconnected' };
   private settings: ISettings = {
     accountToken: undefined,
     allowLan: false,
@@ -407,7 +407,7 @@ class ApplicationMain {
     // notify user about inconsistent version
     if (
       process.env.NODE_ENV !== 'development' &&
-      !this.shouldSuppressNotifications() &&
+      !this.shouldSuppressNotifications(true) &&
       !this.currentVersion.isConsistent
     ) {
       this.notificationController.notifyInconsistentVersion();
@@ -480,12 +480,16 @@ class ApplicationMain {
   private async subscribeEvents(): Promise<void> {
     const daemonEventListener = new SubscriptionListener(
       (daemonEvent: DaemonEvent) => {
-        if ('stateTransition' in daemonEvent) {
-          this.setTunnelState(daemonEvent.stateTransition);
+        if ('tunnelState' in daemonEvent) {
+          this.setTunnelState(daemonEvent.tunnelState);
         } else if ('settings' in daemonEvent) {
           this.setSettings(daemonEvent.settings);
         } else if ('relayList' in daemonEvent) {
           this.setRelays(daemonEvent.relayList, this.settings.relaySettings);
+        } else if ('wireguardKey' in daemonEvent) {
+          /// TODO: handle wireguard key events properly.
+          log.info(`Received new key event`);
+          log.info(daemonEvent);
         }
       },
       (error: Error) => {
@@ -508,12 +512,12 @@ class ApplicationMain {
     }
   }
 
-  private setTunnelState(newState: TunnelStateTransition) {
+  private setTunnelState(newState: TunnelState) {
     this.tunnelState = newState;
     this.updateTrayIcon(newState, this.settings.blockWhenDisconnected);
     this.updateLocation();
 
-    if (!this.shouldSuppressNotifications()) {
+    if (!this.shouldSuppressNotifications(false)) {
       this.notificationController.notifyTunnelState(newState);
     }
 
@@ -673,7 +677,7 @@ class ApplicationMain {
     // notify user to update the app if it became unsupported
     if (
       process.env.NODE_ENV !== 'development' &&
-      !this.shouldSuppressNotifications() &&
+      !this.shouldSuppressNotifications(true) &&
       currentVersionInfo.isConsistent &&
       !latestVersionInfo.currentIsSupported &&
       upgradeVersion
@@ -709,21 +713,35 @@ class ApplicationMain {
     }
   }
 
-  private shouldSuppressNotifications(): boolean {
-    return this.windowController ? this.windowController.isVisible() : false;
+  private shouldSuppressNotifications(isCriticalNotification: boolean): boolean {
+    const isVisible = this.windowController ? this.windowController.isVisible() : false;
+
+    if (isCriticalNotification) {
+      return isVisible;
+    } else {
+      return isVisible || !this.guiSettings.enableSystemNotifications;
+    }
   }
 
   private async updateLocation() {
-    const state = this.tunnelState.state;
+    const tunnelState = this.tunnelState;
 
-    if (state === 'connected' || state === 'disconnected' || state === 'connecting') {
+    if (tunnelState.state === 'connected' || tunnelState.state === 'connecting') {
+      // Location was broadcasted with the tunnel state, but it doesn't contain the relay out IP
+      // address, so it will have to be fetched afterwards
+      if (tunnelState.details && tunnelState.details.location) {
+        this.setLocation(tunnelState.details.location);
+      }
+    } else if (tunnelState.state === 'disconnected') {
+      // It may take some time to fetch the new user location.
+      // So take the user to the last known location when disconnected.
+      if (this.lastDisconnectedLocation) {
+        this.setLocation(this.lastDisconnectedLocation);
+      }
+    }
+
+    if (tunnelState.state === 'connected' || tunnelState.state === 'disconnected') {
       try {
-        // It may take some time to fetch the new user location.
-        // So take the user to the last known location when disconnected.
-        if (state === 'disconnected' && this.lastDisconnectedLocation) {
-          this.setLocation(this.lastDisconnectedLocation);
-        }
-
         // Fetch the new user location
         const location = await this.daemonRpc.getLocation();
         // If the location is currently unavailable, do nothing! This only ever
@@ -741,7 +759,7 @@ class ApplicationMain {
         // Broadcast the new location.
         // There is a chance that the location is not stale if the tunnel state before the location
         // request is the same as after receiving the response.
-        if (this.tunnelState.state === state) {
+        if (this.tunnelState.state === tunnelState.state) {
           this.setLocation(location);
         }
       } catch (error) {
@@ -750,10 +768,7 @@ class ApplicationMain {
     }
   }
 
-  private trayIconType(
-    tunnelState: TunnelStateTransition,
-    blockWhenDisconnected: boolean,
-  ): TrayIconType {
+  private trayIconType(tunnelState: TunnelState, blockWhenDisconnected: boolean): TrayIconType {
     switch (tunnelState.state) {
       case 'connected':
         return 'secured';
@@ -781,7 +796,7 @@ class ApplicationMain {
     }
   }
 
-  private updateTrayIcon(tunnelState: TunnelStateTransition, blockWhenDisconnected: boolean) {
+  private updateTrayIcon(tunnelState: TunnelState, blockWhenDisconnected: boolean) {
     const type = this.trayIconType(tunnelState, blockWhenDisconnected);
 
     if (this.trayIconController) {
@@ -843,6 +858,10 @@ class ApplicationMain {
 
     IpcMainEventChannel.tunnel.handleConnect(() => this.daemonRpc.connectTunnel());
     IpcMainEventChannel.tunnel.handleDisconnect(() => this.daemonRpc.disconnectTunnel());
+
+    IpcMainEventChannel.guiSettings.handleEnableSystemNotifications((flag: boolean) => {
+      this.guiSettings.enableSystemNotifications = flag;
+    });
 
     IpcMainEventChannel.guiSettings.handleAutoConnect((autoConnect: boolean) => {
       this.guiSettings.autoConnect = autoConnect;

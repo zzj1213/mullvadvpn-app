@@ -30,8 +30,6 @@ export type BlockReason =
 
 export type AfterDisconnect = 'nothing' | 'block' | 'reconnect';
 
-export type TunnelState = 'connecting' | 'connected' | 'disconnecting' | 'disconnected' | 'blocked';
-
 export type TunnelType = 'wireguard' | 'openvpn';
 export function tunnelTypeToString(tunnel: TunnelType): string {
   switch (tunnel) {
@@ -72,14 +70,20 @@ export interface IProxyEndpoint {
 }
 
 export type DaemonEvent =
-  | { stateTransition: TunnelStateTransition }
+  | { tunnelState: TunnelState }
   | { settings: ISettings }
-  | { relayList: IRelayList };
+  | { relayList: IRelayList }
+  | { wireguardKey: KeygenEvent };
 
-export type TunnelStateTransition =
+export interface ITunnelStateRelayInfo {
+  endpoint: ITunnelEndpoint;
+  location?: ILocation;
+}
+
+export type TunnelState =
   | { state: 'disconnected' }
-  | { state: 'connecting'; details?: ITunnelEndpoint }
-  | { state: 'connected'; details: ITunnelEndpoint }
+  | { state: 'connecting'; details?: ITunnelStateRelayInfo }
+  | { state: 'connected'; details: ITunnelStateRelayInfo }
   | { state: 'disconnecting'; details: AfterDisconnect }
   | { state: 'blocked'; details: BlockReason };
 
@@ -276,6 +280,12 @@ export interface ISettings {
   tunnelOptions: ITunnelOptions;
   bridgeSettings: BridgeSettings;
   bridgeState: BridgeState;
+}
+
+export type KeygenEvent = INewWireguardKey | 'too_many_keys' | 'generation_failure';
+
+export interface INewWireguardKey {
+  newKey: string;
 }
 
 export type BridgeState = 'auto' | 'on' | 'off';

@@ -18,7 +18,7 @@ use mullvad_types::{
     relay_constraints::{BridgeSettings, BridgeState, RelaySettingsUpdate},
     relay_list::RelayList,
     settings::{self, Settings},
-    states::TargetState,
+    states::{TargetState, TunnelState},
     version, DaemonEvent,
 };
 use std::{
@@ -27,7 +27,7 @@ use std::{
 };
 use talpid_core::mpsc::IntoSender;
 use talpid_ipc;
-use talpid_types::{net::wireguard, tunnel::TunnelStateTransition, ErrorExt};
+use talpid_types::{net::wireguard, ErrorExt};
 use uuid;
 
 /// FIXME(linus): This is here just because the futures crate has deprecated it and jsonrpc_core
@@ -87,7 +87,7 @@ build_rpc_trait! {
         /// Returns the current state of the Mullvad client. Changes to this state will
         /// be announced to subscribers of `new_state`.
         #[rpc(meta, name = "get_state")]
-        fn get_state(&self, Self::Metadata) -> BoxFuture<TunnelStateTransition, Error>;
+        fn get_state(&self, Self::Metadata) -> BoxFuture<TunnelState, Error>;
 
         /// Performs a geoIP lookup and returns the current location as perceived by the public
         /// internet.
@@ -132,7 +132,7 @@ build_rpc_trait! {
 
         /// Generates new wireguard key for current account
         #[rpc(meta, name = "generate_wireguard_key")]
-        fn generate_wireguard_key(&self, Self::Metadata) -> BoxFuture<(), Error>;
+        fn generate_wireguard_key(&self, Self::Metadata) -> BoxFuture<mullvad_types::wireguard::KeygenEvent, Error>;
 
         /// Retrieve a public key for current account if the account has one.
         #[rpc(meta, name = "get_wireguard_key")]
@@ -172,7 +172,7 @@ pub enum ManagementCommand {
     /// Change target state.
     SetTargetState(OneshotSender<Result<(), ()>>, TargetState),
     /// Request the current state.
-    GetState(OneshotSender<TunnelStateTransition>),
+    GetState(OneshotSender<TunnelState>),
     /// Get the current geographical location.
     GetCurrentLocation(OneshotSender<Option<GeoIpLocation>>),
     /// Request the metadata for an account.
@@ -212,7 +212,7 @@ pub enum ManagementCommand {
     /// Get the daemon settings
     GetSettings(OneshotSender<Settings>),
     /// Generate new wireguard key
-    GenerateWireguardKey(OneshotSender<Result<(), mullvad_rpc::Error>>),
+    GenerateWireguardKey(OneshotSender<mullvad_types::wireguard::KeygenEvent>),
     /// Return a public key of the currently set wireguard private key, if there is one
     GetWireguardKey(OneshotSender<Option<wireguard::PublicKey>>),
     /// Verify if the currently set wireguard key is valid.
@@ -280,9 +280,9 @@ pub struct ManagementInterfaceEventBroadcaster {
 
 impl EventListener for ManagementInterfaceEventBroadcaster {
     /// Sends a new state update to all `new_state` subscribers of the management interface.
-    fn notify_new_state(&self, new_state: TunnelStateTransition) {
+    fn notify_new_state(&self, new_state: TunnelState) {
         log::debug!("Broadcasting new state: {:?}", new_state);
-        self.notify(DaemonEvent::StateTransition(new_state));
+        self.notify(DaemonEvent::TunnelState(new_state));
     }
 
     /// Sends settings to all `settings` subscribers of the management interface.
@@ -295,6 +295,11 @@ impl EventListener for ManagementInterfaceEventBroadcaster {
     fn notify_relay_list(&self, relay_list: RelayList) {
         log::debug!("Broadcasting new relay list");
         self.notify(DaemonEvent::RelayList(relay_list));
+    }
+
+    fn notify_key_event(&self, key_event: mullvad_types::wireguard::KeygenEvent) {
+        log::debug!("Broadcasting new wireguard key event");
+        self.notify(DaemonEvent::WireguardKey(key_event));
     }
 }
 
@@ -487,7 +492,7 @@ impl<T: From<ManagementCommand> + 'static + Send> ManagementInterfaceApi
         Box::new(future)
     }
 
-    fn get_state(&self, _: Self::Metadata) -> BoxFuture<TunnelStateTransition, Error> {
+    fn get_state(&self, _: Self::Metadata) -> BoxFuture<TunnelState, Error> {
         log::debug!("get_state");
         let (state_tx, state_rx) = sync::oneshot::channel();
         let future = self
@@ -611,15 +616,15 @@ impl<T: From<ManagementCommand> + 'static + Send> ManagementInterfaceApi
         Box::new(future)
     }
 
-    fn generate_wireguard_key(&self, _: Self::Metadata) -> BoxFuture<(), Error> {
+    fn generate_wireguard_key(
+        &self,
+        _: Self::Metadata,
+    ) -> BoxFuture<mullvad_types::wireguard::KeygenEvent, Error> {
         log::debug!("generate_wireguard_key");
         let (tx, rx) = sync::oneshot::channel();
         let future = self
             .send_command_to_daemon(ManagementCommand::GenerateWireguardKey(tx))
-            .and_then(|_| {
-                rx.map_err(|_| Error::internal_error())
-                    .and_then(|res| future::result(res.map_err(|_| Error::internal_error())))
-            });
+            .and_then(|_| rx.map_err(|_| Error::internal_error()));
         Box::new(future)
     }
 

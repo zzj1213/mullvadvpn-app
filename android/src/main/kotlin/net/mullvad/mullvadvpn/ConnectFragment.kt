@@ -1,56 +1,45 @@
 package net.mullvad.mullvadvpn
 
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.CompletableDeferred
-import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.Job
 
-import android.app.Activity
 import android.content.Context
-import android.content.Intent
-import android.net.VpnService
 import android.os.Bundle
-import android.os.Handler
 import android.support.v4.app.Fragment
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
-import android.widget.Button
 import android.widget.ImageButton
 
+import net.mullvad.mullvadvpn.dataproxy.ConnectionProxy
 import net.mullvad.mullvadvpn.dataproxy.LocationInfoCache
-import net.mullvad.mullvadvpn.model.GeoIpLocation
-import net.mullvad.mullvadvpn.model.TunnelStateTransition
+import net.mullvad.mullvadvpn.dataproxy.RelayListListener
+import net.mullvad.mullvadvpn.model.TunnelState
 
 class ConnectFragment : Fragment() {
     private lateinit var actionButton: ConnectActionButton
+    private lateinit var switchLocationButton: SwitchLocationButton
     private lateinit var headerBar: HeaderBar
     private lateinit var notificationBanner: NotificationBanner
     private lateinit var status: ConnectionStatus
     private lateinit var locationInfo: LocationInfo
 
     private lateinit var parentActivity: MainActivity
+    private lateinit var connectionProxy: ConnectionProxy
     private lateinit var locationInfoCache: LocationInfoCache
+    private lateinit var relayListListener: RelayListListener
 
-    private var daemon = CompletableDeferred<MullvadDaemon>()
-    private var vpnPermission = CompletableDeferred<Unit>()
-
-    private var fetchInitialStateJob = fetchInitialState()
-    private var generateWireguardKeyJob = generateWireguardKey()
-
-    private var activeAction: Job? = null
-    private var attachListenerJob: Job? = null
     private var updateViewJob: Job? = null
-    private var waitForDaemonJob: Job? = null
 
     override fun onAttach(context: Context) {
         super.onAttach(context)
 
         parentActivity = context as MainActivity
+        connectionProxy = parentActivity.connectionProxy
         locationInfoCache = parentActivity.locationInfoCache
-        waitForDaemonJob = waitForDaemon(parentActivity.asyncDaemon)
+        relayListListener = parentActivity.relayListListener
     }
 
     override fun onCreateView(
@@ -64,10 +53,6 @@ class ConnectFragment : Fragment() {
             parentActivity.openSettings()
         }
 
-        view.findViewById<Button>(R.id.switch_location).setOnClickListener {
-            openSwitchLocationScreen()
-        }
-
         headerBar = HeaderBar(view, context!!)
         notificationBanner = NotificationBanner(view)
         status = ConnectionStatus(view, context!!)
@@ -75,121 +60,61 @@ class ConnectFragment : Fragment() {
 
         actionButton = ConnectActionButton(view)
         actionButton.apply {
-            onConnect = { connect() }
-            onCancel = { disconnect() }
-            onDisconnect = { disconnect() }
+            onConnect = { connectionProxy.connect() }
+            onCancel = { connectionProxy.disconnect() }
+            onDisconnect = { connectionProxy.disconnect() }
         }
 
-        attachListenerJob = attachListener()
+        switchLocationButton = SwitchLocationButton(view)
+        switchLocationButton.onClick = { openSwitchLocationScreen() }
+
+        updateView(connectionProxy.uiState)
+
+        connectionProxy.onUiStateChange = { uiState ->
+            updateViewJob?.cancel()
+            updateViewJob = GlobalScope.launch(Dispatchers.Main) {
+                updateView(uiState)
+            }
+        }
 
         return view
     }
 
+    override fun onResume() {
+        super.onResume()
+
+        relayListListener.onRelayListChange = { relayList, selectedRelayItem ->
+            switchLocationButton.location = selectedRelayItem
+        }
+    }
+
+    override fun onPause() {
+        relayListListener.onRelayListChange = null
+
+        super.onPause()
+    }
+
     override fun onDestroyView() {
         locationInfo.onDestroy()
+        switchLocationButton.onDestroy()
 
-        waitForDaemonJob?.cancel()
-        attachListenerJob?.cancel()
-
-        detachListener()
-
-        generateWireguardKeyJob.cancel()
+        connectionProxy.onUiStateChange = null
         updateViewJob?.cancel()
 
         super.onDestroyView()
     }
 
-    override fun onActivityResult(requestCode: Int, resultCode: Int, resultData: Intent?) {
-        if (resultCode == Activity.RESULT_OK) {
-            vpnPermission.complete(Unit)
-        }
-    }
+    private fun updateView(uiState: TunnelState) {
+        val realState = connectionProxy.state
 
-    private fun waitForDaemon(asyncDaemon: Deferred<MullvadDaemon>) =
-            GlobalScope.launch(Dispatchers.Default) {
-        daemon.complete(asyncDaemon.await())
-    }
+        locationInfoCache.state = realState
+        headerBar.setState(realState)
 
-    private fun attachListener() = GlobalScope.launch(Dispatchers.Default) {
-        daemon.await().onTunnelStateChange = { state ->
-            synchronized(this@ConnectFragment) {
-                updateViewJob = updateView(state)
-            }
-        }
-    }
+        actionButton.state = uiState
+        switchLocationButton.state = uiState
 
-    private fun detachListener() = GlobalScope.launch(Dispatchers.Default) {
-        daemon.await().onTunnelStateChange = null
-    }
-
-    private fun fetchInitialState() = GlobalScope.launch(Dispatchers.Default) {
-        val state = daemon.await().getState()
-
-        synchronized(this@ConnectFragment) {
-            updateViewJob = updateViewJob ?: updateView(state)
-        }
-    }
-
-    private fun generateWireguardKey() = GlobalScope.launch(Dispatchers.Default) {
-        val daemon = this@ConnectFragment.daemon.await()
-        val key = daemon.getWireguardKey()
-
-        if (key == null) {
-            daemon.generateWireguardKey()
-        }
-    }
-
-    private fun requestVpnPermission() {
-        val intent = VpnService.prepare(parentActivity)
-
-        vpnPermission = CompletableDeferred<Unit>()
-
-        if (intent != null) {
-            startActivityForResult(intent, 0)
-        } else {
-            onActivityResult(0, Activity.RESULT_OK, null)
-        }
-    }
-
-    private fun connect() {
-        updateViewToPreConnecting()
-        activeAction?.cancel()
-
-        requestVpnPermission()
-
-        activeAction = GlobalScope.launch(Dispatchers.Default) {
-            vpnPermission.await()
-            generateWireguardKeyJob.join()
-            daemon.await().connect()
-        }
-    }
-
-    private fun disconnect() {
-        updateView(TunnelStateTransition.Disconnecting())
-        activeAction?.cancel()
-
-        activeAction = GlobalScope.launch(Dispatchers.Default) {
-            daemon.await().disconnect()
-        }
-    }
-
-    private fun updateViewToPreConnecting() {
-        val connecting = TunnelStateTransition.Connecting()
-        val disconnected = TunnelStateTransition.Disconnected()
-
-        headerBar.setState(disconnected)
-
-        actionButton.state = connecting
-        notificationBanner.setState(connecting)
-        status.setState(connecting)
-    }
-
-    private fun updateView(state: TunnelStateTransition) = GlobalScope.launch(Dispatchers.Main) {
-        actionButton.state = state
-        headerBar.setState(state)
-        notificationBanner.setState(state)
-        status.setState(state)
-        locationInfoCache.setState(state)
+        notificationBanner.setState(uiState)
+        status.setState(uiState)
     }
 
     private fun openSwitchLocationScreen() {

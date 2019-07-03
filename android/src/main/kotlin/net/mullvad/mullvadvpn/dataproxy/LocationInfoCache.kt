@@ -8,7 +8,7 @@ import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.Job
 
 import net.mullvad.mullvadvpn.model.GeoIpLocation
-import net.mullvad.mullvadvpn.model.TunnelStateTransition
+import net.mullvad.mullvadvpn.model.TunnelState
 import net.mullvad.mullvadvpn.MullvadDaemon
 
 class LocationInfoCache(val daemon: Deferred<MullvadDaemon>) {
@@ -27,18 +27,21 @@ class LocationInfoCache(val daemon: Deferred<MullvadDaemon>) {
             notifyNewLocation()
         }
 
-    fun setState(state: TunnelStateTransition) {
-        activeFetch?.cancel()
-        activeFetch = null
+    var state: TunnelState = TunnelState.Disconnected()
+        set(value) {
+            field = value
 
-        when (state) {
-            is TunnelStateTransition.Disconnected -> activeFetch = fetchRealLocation()
-            is TunnelStateTransition.Connecting -> activeFetch = fetchRelayLocation()
-            is TunnelStateTransition.Connected -> activeFetch = fetchRelayLocation()
-            is TunnelStateTransition.Disconnecting -> location = lastKnownRealLocation
-            is TunnelStateTransition.Blocked -> location = null
+            when (value) {
+                is TunnelState.Disconnected -> fetchLocation()
+                is TunnelState.Connecting -> location = value.location
+                is TunnelState.Connected -> {
+                    location = value.location
+                    fetchLocation()
+                }
+                is TunnelState.Disconnecting -> location = lastKnownRealLocation
+                is TunnelState.Blocked -> location = null
+            }
         }
-    }
 
     fun notifyNewLocation() {
         val location = this.location
@@ -49,24 +52,40 @@ class LocationInfoCache(val daemon: Deferred<MullvadDaemon>) {
         onNewLocation?.invoke(country, city, hostname)
     }
 
-    private fun fetchRealLocation() = GlobalScope.launch(Dispatchers.Main) {
-        var realLocation: GeoIpLocation? = null
-        var remainingAttempts = 10
+    private fun fetchLocation() {
+        val previousFetch = activeFetch
+        val initialState = state
 
-        while (realLocation == null && remainingAttempts > 0) {
-            realLocation = fetchLocation().await()
-            remainingAttempts -= 1
+        activeFetch = GlobalScope.launch(Dispatchers.Main) {
+            var newLocation: GeoIpLocation? = null
+
+            previousFetch?.join()
+
+            while (newLocation == null && shouldRetryFetch() && state == initialState) {
+                newLocation = executeFetch().await()
+            }
+
+            if (newLocation != null && state == initialState) {
+                when (state) {
+                    is TunnelState.Disconnected -> {
+                        lastKnownRealLocation = newLocation
+                        location = newLocation
+                    }
+                    is TunnelState.Connecting -> location = newLocation
+                    is TunnelState.Connected -> location = newLocation
+                }
+            }
         }
-
-        lastKnownRealLocation = realLocation
-        location = realLocation
     }
 
-    private fun fetchRelayLocation() = GlobalScope.launch(Dispatchers.Main) {
-        location = fetchLocation().await()
-    }
-
-    private fun fetchLocation() = GlobalScope.async(Dispatchers.Default) {
+    private fun executeFetch() = GlobalScope.async(Dispatchers.Default) {
         daemon.await().getCurrentLocation()
+    }
+
+    private fun shouldRetryFetch(): Boolean {
+        val state = this.state
+
+        return state is TunnelState.Disconnected ||
+            state is TunnelState.Connected
     }
 }

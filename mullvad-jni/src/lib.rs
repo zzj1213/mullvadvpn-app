@@ -18,8 +18,14 @@ use jni::{
 };
 use lazy_static::lazy_static;
 use mullvad_daemon::{logging, version, Daemon, DaemonCommandSender};
+use mullvad_types::wireguard::KeygenEvent;
 use parking_lot::RwLock;
-use std::{collections::HashMap, path::PathBuf, sync::mpsc, thread};
+use std::{
+    collections::HashMap,
+    path::{Path, PathBuf},
+    sync::mpsc,
+    thread,
+};
 use talpid_types::ErrorExt;
 
 const LOG_FILENAME: &str = "daemon.log";
@@ -27,6 +33,7 @@ const LOG_FILENAME: &str = "daemon.log";
 const CLASSES_TO_LOAD: &[&str] = &[
     "java/net/InetAddress",
     "java/util/ArrayList",
+    "java/util/List",
     "net/mullvad/mullvadvpn/model/AccountData",
     "net/mullvad/mullvadvpn/model/Constraint$Any",
     "net/mullvad/mullvadvpn/model/Constraint$Only",
@@ -46,11 +53,11 @@ const CLASSES_TO_LOAD: &[&str] = &[
     "net/mullvad/mullvadvpn/model/RelaySettingsUpdate$RelayConstraintsUpdate",
     "net/mullvad/mullvadvpn/model/Settings",
     "net/mullvad/mullvadvpn/model/TunConfig",
-    "net/mullvad/mullvadvpn/model/TunnelStateTransition$Blocked",
-    "net/mullvad/mullvadvpn/model/TunnelStateTransition$Connected",
-    "net/mullvad/mullvadvpn/model/TunnelStateTransition$Connecting",
-    "net/mullvad/mullvadvpn/model/TunnelStateTransition$Disconnected",
-    "net/mullvad/mullvadvpn/model/TunnelStateTransition$Disconnecting",
+    "net/mullvad/mullvadvpn/model/TunnelState$Blocked",
+    "net/mullvad/mullvadvpn/model/TunnelState$Connected",
+    "net/mullvad/mullvadvpn/model/TunnelState$Connecting",
+    "net/mullvad/mullvadvpn/model/TunnelState$Disconnected",
+    "net/mullvad/mullvadvpn/model/TunnelState$Disconnecting",
     "net/mullvad/mullvadvpn/MullvadDaemon",
     "net/mullvad/mullvadvpn/MullvadVpnService",
 ];
@@ -220,7 +227,12 @@ pub extern "system" fn Java_net_mullvad_mullvadvpn_MullvadDaemon_generateWiregua
     _: JObject,
 ) -> jboolean {
     match DAEMON_INTERFACE.generate_wireguard_key() {
-        Ok(()) => JNI_TRUE,
+        Ok(KeygenEvent::NewKey(_)) => JNI_TRUE,
+        // TODO: Handle the new result better.
+        Ok(keygen_failure) => {
+            log::error!("Failed to generate wireguard key {:?}", keygen_failure);
+            JNI_FALSE
+        }
         Err(error) => {
             log::error!(
                 "{}",
@@ -364,5 +376,53 @@ pub extern "system" fn Java_net_mullvad_mullvadvpn_MullvadDaemon_updateRelaySett
             "{}",
             error.display_chain_with_msg("Failed to update relay settings")
         );
+    }
+}
+
+#[no_mangle]
+#[allow(non_snake_case)]
+pub extern "system" fn Java_net_mullvad_mullvadvpn_dataproxy_MullvadProblemReport_collectReport(
+    env: JNIEnv,
+    _: JObject,
+    outputPath: JString,
+) -> jboolean {
+    let output_path_string = String::from_java(&env, outputPath);
+    let output_path = Path::new(&output_path_string);
+
+    match mullvad_problem_report::collect_report(&[], output_path, Vec::new()) {
+        Ok(()) => JNI_TRUE,
+        Err(error) => {
+            log::error!(
+                "{}",
+                error.display_chain_with_msg("Failed to collect problem report")
+            );
+            JNI_FALSE
+        }
+    }
+}
+
+#[no_mangle]
+#[allow(non_snake_case)]
+pub extern "system" fn Java_net_mullvad_mullvadvpn_dataproxy_MullvadProblemReport_sendProblemReport(
+    env: JNIEnv,
+    _: JObject,
+    userEmail: JString,
+    userMessage: JString,
+    outputPath: JString,
+) -> jboolean {
+    let user_email = String::from_java(&env, userEmail);
+    let user_message = String::from_java(&env, userMessage);
+    let output_path_string = String::from_java(&env, outputPath);
+    let output_path = Path::new(&output_path_string);
+
+    match mullvad_problem_report::send_problem_report(&user_email, &user_message, output_path) {
+        Ok(()) => JNI_TRUE,
+        Err(error) => {
+            log::error!(
+                "{}",
+                error.display_chain_with_msg("Failed to collect problem report")
+            );
+            JNI_FALSE
+        }
     }
 }

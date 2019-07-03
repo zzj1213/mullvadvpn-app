@@ -9,34 +9,38 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.Job
 
+import android.app.Activity
 import android.content.ComponentName
 import android.content.Intent
 import android.content.ServiceConnection
+import android.net.VpnService
 import android.os.Bundle
 import android.os.IBinder
 import android.support.v4.app.FragmentActivity
 
 import net.mullvad.mullvadvpn.dataproxy.AccountCache
+import net.mullvad.mullvadvpn.dataproxy.ConnectionProxy
 import net.mullvad.mullvadvpn.dataproxy.LocationInfoCache
+import net.mullvad.mullvadvpn.dataproxy.MullvadProblemReport
 import net.mullvad.mullvadvpn.dataproxy.RelayListListener
+import net.mullvad.mullvadvpn.dataproxy.SettingsListener
 import net.mullvad.mullvadvpn.model.RelaySettings
 import net.mullvad.mullvadvpn.model.Settings
 import net.mullvad.mullvadvpn.relaylist.RelayItem
 import net.mullvad.mullvadvpn.relaylist.RelayList
 
 class MainActivity : FragmentActivity() {
-    var asyncDaemon = CompletableDeferred<MullvadDaemon>()
-    val daemon
-        get() = runBlocking { asyncDaemon.await() }
+    private var vpnPermission: CompletableDeferred<Boolean>? = null
 
-    var asyncSettings = fetchSettings()
+    var daemon = CompletableDeferred<MullvadDaemon>()
         private set
-    val settings
-        get() = runBlocking { asyncSettings.await() }
 
-    val accountCache = AccountCache(this)
-    val locationInfoCache = LocationInfoCache(asyncDaemon)
+    val connectionProxy = ConnectionProxy(this)
+    val locationInfoCache = LocationInfoCache(daemon)
+    val problemReport = MullvadProblemReport()
+    var settingsListener = SettingsListener(this)
     var relayListListener = RelayListListener(this)
+    val accountCache = AccountCache(settingsListener, daemon)
 
     private var waitForDaemonJob: Job? = null
 
@@ -45,13 +49,13 @@ class MainActivity : FragmentActivity() {
             val localBinder = binder as MullvadVpnService.LocalBinder
 
             waitForDaemonJob = GlobalScope.launch(Dispatchers.Default) {
-                asyncDaemon.complete(localBinder.asyncDaemon.await())
+                daemon.complete(localBinder.daemon.await())
             }
         }
 
         override fun onServiceDisconnected(className: ComponentName) {
-            asyncDaemon.cancel()
-            asyncDaemon = CompletableDeferred<MullvadDaemon>()
+            daemon.cancel()
+            daemon = CompletableDeferred<MullvadDaemon>()
         }
     }
 
@@ -73,6 +77,14 @@ class MainActivity : FragmentActivity() {
         bindService(intent, serviceConnection, 0)
     }
 
+    override fun onActivityResult(requestCode: Int, resultCode: Int, resultData: Intent?) {
+        if (resultCode == Activity.RESULT_OK) {
+            vpnPermission?.complete(true)
+        } else {
+            vpnPermission?.complete(false)
+        }
+    }
+
     override fun onStop() {
         unbindService(serviceConnection)
 
@@ -82,10 +94,10 @@ class MainActivity : FragmentActivity() {
     override fun onDestroy() {
         accountCache.onDestroy()
         relayListListener.onDestroy()
+        settingsListener.onDestroy()
 
         waitForDaemonJob?.cancel()
-        asyncSettings.cancel()
-        asyncDaemon.cancel()
+        daemon.cancel()
 
         super.onDestroy()
     }
@@ -104,11 +116,19 @@ class MainActivity : FragmentActivity() {
         }
     }
 
-    fun refetchSettings() {
-        if (asyncSettings.isCompleted) {
-            asyncSettings = fetchSettings()
-            accountCache.settings = asyncSettings
+    fun requestVpnPermission(): Deferred<Boolean> {
+        val intent = VpnService.prepare(this)
+        val request = CompletableDeferred<Boolean>()
+
+        vpnPermission = request
+
+        if (intent != null) {
+            startActivityForResult(intent, 0)
+        } else {
+            request.complete(true)
         }
+
+        return request
     }
 
     private fun addInitialFragment() {
@@ -119,6 +139,6 @@ class MainActivity : FragmentActivity() {
     }
 
     private fun fetchSettings() = GlobalScope.async(Dispatchers.Default) {
-        asyncDaemon.await().getSettings()
+        daemon.await().getSettings()
     }
 }

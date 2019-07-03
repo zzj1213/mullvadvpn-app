@@ -6,7 +6,7 @@ import net.mullvad.mullvadvpn.model.PublicKey
 import net.mullvad.mullvadvpn.model.RelayList
 import net.mullvad.mullvadvpn.model.RelaySettingsUpdate
 import net.mullvad.mullvadvpn.model.Settings
-import net.mullvad.mullvadvpn.model.TunnelStateTransition
+import net.mullvad.mullvadvpn.model.TunnelState
 
 class MullvadDaemon(val vpnService: MullvadVpnService) {
     init {
@@ -15,7 +15,8 @@ class MullvadDaemon(val vpnService: MullvadVpnService) {
     }
 
     var onRelayListChange: ((RelayList) -> Unit)? = null
-    var onTunnelStateChange: ((TunnelStateTransition) -> Unit)? = null
+    var onSettingsChange: ((Settings) -> Unit)? = null
+    var onTunnelStateChange: ((TunnelState) -> Unit)? = null
 
     external fun connect()
     external fun disconnect()
@@ -24,7 +25,7 @@ class MullvadDaemon(val vpnService: MullvadVpnService) {
     external fun getCurrentLocation(): GeoIpLocation?
     external fun getRelayLocations(): RelayList
     external fun getSettings(): Settings
-    external fun getState(): TunnelStateTransition
+    external fun getState(): TunnelState
     external fun getWireguardKey(): PublicKey?
     external fun setAccount(accountToken: String?)
     external fun updateRelaySettings(update: RelaySettingsUpdate)
@@ -35,7 +36,11 @@ class MullvadDaemon(val vpnService: MullvadVpnService) {
         onRelayListChange?.invoke(relayList)
     }
 
-    private fun notifyTunnelStateEvent(event: TunnelStateTransition) {
+    private fun notifySettingsEvent(settings: Settings) {
+        onSettingsChange?.invoke(settings)
+    }
+
+    private fun notifyTunnelStateEvent(event: TunnelState) {
         onTunnelStateChange?.invoke(event)
     }
 }

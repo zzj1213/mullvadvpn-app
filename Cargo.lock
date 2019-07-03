@@ -1152,6 +1152,7 @@ dependencies = [
  "fern 0.5.8 (registry+https://github.com/rust-lang/crates.io-index)",
  "futures 0.1.25 (registry+https://github.com/rust-lang/crates.io-index)",
  "ipnetwork 0.14.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "jsonrpc-client-core 0.5.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "jsonrpc-core 8.0.2 (git+https://github.com/mullvad/jsonrpc?branch=mullvad-fork)",
  "jsonrpc-ipc-server 8.0.1 (git+https://github.com/mullvad/jsonrpc?branch=mullvad-fork)",
  "jsonrpc-macros 8.0.1 (git+https://github.com/mullvad/jsonrpc?branch=mullvad-fork)",
@@ -1173,6 +1174,7 @@ dependencies = [
  "talpid-ipc 0.1.0",
  "talpid-types 0.1.0",
  "tokio-core 0.1.17 (registry+https://github.com/rust-lang/crates.io-index)",
+ "tokio-retry 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "tokio-timer 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "uuid 0.7.4 (registry+https://github.com/rust-lang/crates.io-index)",
  "winapi 0.3.6 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -1214,6 +1216,7 @@ dependencies = [
  "log-panics 2.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "mullvad-daemon 2019.5.0",
  "mullvad-paths 0.1.0",
+ "mullvad-problem-report 2019.5.0",
  "mullvad-types 0.1.0",
  "parking_lot 0.8.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "talpid-core 0.1.0",
@@ -1235,6 +1238,7 @@ version = "2019.5.0"
 dependencies = [
  "clap 2.32.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "dirs 1.0.5 (registry+https://github.com/rust-lang/crates.io-index)",
+ "duct 0.12.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "env_logger 0.6.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "err-derive 0.1.5 (registry+https://github.com/rust-lang/crates.io-index)",
  "lazy_static 1.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -1323,7 +1327,7 @@ dependencies = [
 [[package]]
 name = "netlink-packet"
 version = "0.1.1"
-source = "git+https://github.com/mullvad/netlink?rev=e629e58797c2d14d7f4777c4ade0d85ee0167027#e629e58797c2d14d7f4777c4ade0d85ee0167027"
+source = "git+https://github.com/mullvad/netlink?rev=b367ac9c012e6c2a5e065e201384ec20d9708109#b367ac9c012e6c2a5e065e201384ec20d9708109"
 dependencies = [
  "byteorder 1.3.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "bytes 0.4.12 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -1331,28 +1335,28 @@ dependencies = [
  "lazy_static 1.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "libc 0.2.51 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.4.6 (registry+https://github.com/rust-lang/crates.io-index)",
- "netlink-sys 0.1.0 (git+https://github.com/mullvad/netlink?rev=e629e58797c2d14d7f4777c4ade0d85ee0167027)",
+ "netlink-sys 0.1.0 (git+https://github.com/mullvad/netlink?rev=b367ac9c012e6c2a5e065e201384ec20d9708109)",
 ]
 
 [[package]]
 name = "netlink-proto"
 version = "0.1.1"
-source = "git+https://github.com/mullvad/netlink?rev=e629e58797c2d14d7f4777c4ade0d85ee0167027#e629e58797c2d14d7f4777c4ade0d85ee0167027"
+source = "git+https://github.com/mullvad/netlink?rev=b367ac9c012e6c2a5e065e201384ec20d9708109#b367ac9c012e6c2a5e065e201384ec20d9708109"
 dependencies = [
  "bytes 0.4.12 (registry+https://github.com/rust-lang/crates.io-index)",
  "failure 0.1.5 (registry+https://github.com/rust-lang/crates.io-index)",
  "futures 0.1.25 (registry+https://github.com/rust-lang/crates.io-index)",
  "lazy_static 1.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.4.6 (registry+https://github.com/rust-lang/crates.io-index)",
- "netlink-packet 0.1.1 (git+https://github.com/mullvad/netlink?rev=e629e58797c2d14d7f4777c4ade0d85ee0167027)",
- "netlink-sys 0.1.0 (git+https://github.com/mullvad/netlink?rev=e629e58797c2d14d7f4777c4ade0d85ee0167027)",
+ "netlink-packet 0.1.1 (git+https://github.com/mullvad/netlink?rev=b367ac9c012e6c2a5e065e201384ec20d9708109)",
+ "netlink-sys 0.1.0 (git+https://github.com/mullvad/netlink?rev=b367ac9c012e6c2a5e065e201384ec20d9708109)",
  "tokio-io 0.1.12 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
 name = "netlink-sys"
 version = "0.1.0"
-source = "git+https://github.com/mullvad/netlink?rev=e629e58797c2d14d7f4777c4ade0d85ee0167027#e629e58797c2d14d7f4777c4ade0d85ee0167027"
+source = "git+https://github.com/mullvad/netlink?rev=b367ac9c012e6c2a5e065e201384ec20d9708109#b367ac9c012e6c2a5e065e201384ec20d9708109"
 dependencies = [
  "futures 0.1.25 (registry+https://github.com/rust-lang/crates.io-index)",
  "libc 0.2.51 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -1877,14 +1881,14 @@ dependencies = [
 [[package]]
 name = "rtnetlink"
 version = "0.1.1"
-source = "git+https://github.com/mullvad/netlink?rev=e629e58797c2d14d7f4777c4ade0d85ee0167027#e629e58797c2d14d7f4777c4ade0d85ee0167027"
+source = "git+https://github.com/mullvad/netlink?rev=b367ac9c012e6c2a5e065e201384ec20d9708109#b367ac9c012e6c2a5e065e201384ec20d9708109"
 dependencies = [
  "failure 0.1.5 (registry+https://github.com/rust-lang/crates.io-index)",
  "futures 0.1.25 (registry+https://github.com/rust-lang/crates.io-index)",
  "lazy_static 1.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.4.6 (registry+https://github.com/rust-lang/crates.io-index)",
- "netlink-packet 0.1.1 (git+https://github.com/mullvad/netlink?rev=e629e58797c2d14d7f4777c4ade0d85ee0167027)",
- "netlink-proto 0.1.1 (git+https://github.com/mullvad/netlink?rev=e629e58797c2d14d7f4777c4ade0d85ee0167027)",
+ "netlink-packet 0.1.1 (git+https://github.com/mullvad/netlink?rev=b367ac9c012e6c2a5e065e201384ec20d9708109)",
+ "netlink-proto 0.1.1 (git+https://github.com/mullvad/netlink?rev=b367ac9c012e6c2a5e065e201384ec20d9708109)",
 ]
 
 [[package]]
@@ -2156,9 +2160,9 @@ dependencies = [
  "libc 0.2.51 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.4.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "mnl 0.1.0 (git+https://github.com/mullvad/mnl-rs?rev=f0d19501b9b85be9a1ffaec8317a378bcbdf4fa6)",
- "netlink-packet 0.1.1 (git+https://github.com/mullvad/netlink?rev=e629e58797c2d14d7f4777c4ade0d85ee0167027)",
- "netlink-proto 0.1.1 (git+https://github.com/mullvad/netlink?rev=e629e58797c2d14d7f4777c4ade0d85ee0167027)",
- "netlink-sys 0.1.0 (git+https://github.com/mullvad/netlink?rev=e629e58797c2d14d7f4777c4ade0d85ee0167027)",
+ "netlink-packet 0.1.1 (git+https://github.com/mullvad/netlink?rev=b367ac9c012e6c2a5e065e201384ec20d9708109)",
+ "netlink-proto 0.1.1 (git+https://github.com/mullvad/netlink?rev=b367ac9c012e6c2a5e065e201384ec20d9708109)",
+ "netlink-sys 0.1.0 (git+https://github.com/mullvad/netlink?rev=b367ac9c012e6c2a5e065e201384ec20d9708109)",
  "nftnl 0.2.0 (git+https://github.com/mullvad/nftnl-rs?rev=86b30cdc38a6d4b30a900c21f7c644857d6f7401)",
  "nix 0.13.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "notify 4.0.10 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -2169,7 +2173,7 @@ dependencies = [
  "pfctl 0.2.1 (git+https://github.com/mullvad/pfctl-rs?rev=9f31b5ddcab941862470075eab83bb398195f3d6)",
  "regex 1.1.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "resolv-conf 0.6.2 (registry+https://github.com/rust-lang/crates.io-index)",
- "rtnetlink 0.1.1 (git+https://github.com/mullvad/netlink?rev=e629e58797c2d14d7f4777c4ade0d85ee0167027)",
+ "rtnetlink 0.1.1 (git+https://github.com/mullvad/netlink?rev=b367ac9c012e6c2a5e065e201384ec20d9708109)",
  "shell-escape 0.1.4 (registry+https://github.com/rust-lang/crates.io-index)",
  "system-configuration 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "talpid-ipc 0.1.0",
@@ -2477,6 +2481,16 @@ dependencies = [
  "tokio-executor 0.1.7 (registry+https://github.com/rust-lang/crates.io-index)",
  "tokio-io 0.1.12 (registry+https://github.com/rust-lang/crates.io-index)",
  "tokio-sync 0.1.4 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
+name = "tokio-retry"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+dependencies = [
+ "futures 0.1.25 (registry+https://github.com/rust-lang/crates.io-index)",
+ "rand 0.4.6 (registry+https://github.com/rust-lang/crates.io-index)",
+ "tokio-timer 0.2.10 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
@@ -2960,9 +2974,9 @@ dependencies = [
 "checksum mnl 0.1.0 (git+https://github.com/mullvad/mnl-rs?rev=f0d19501b9b85be9a1ffaec8317a378bcbdf4fa6)" = "<none>"
 "checksum mnl-sys 0.1.0 (git+https://github.com/mullvad/mnl-rs?rev=f0d19501b9b85be9a1ffaec8317a378bcbdf4fa6)" = "<none>"
 "checksum net2 0.2.33 (registry+https://github.com/rust-lang/crates.io-index)" = "42550d9fb7b6684a6d404d9fa7250c2eb2646df731d1c06afc06dcee9e1bcf88"
-"checksum netlink-packet 0.1.1 (git+https://github.com/mullvad/netlink?rev=e629e58797c2d14d7f4777c4ade0d85ee0167027)" = "<none>"
-"checksum netlink-proto 0.1.1 (git+https://github.com/mullvad/netlink?rev=e629e58797c2d14d7f4777c4ade0d85ee0167027)" = "<none>"
-"checksum netlink-sys 0.1.0 (git+https://github.com/mullvad/netlink?rev=e629e58797c2d14d7f4777c4ade0d85ee0167027)" = "<none>"
+"checksum netlink-packet 0.1.1 (git+https://github.com/mullvad/netlink?rev=b367ac9c012e6c2a5e065e201384ec20d9708109)" = "<none>"
+"checksum netlink-proto 0.1.1 (git+https://github.com/mullvad/netlink?rev=b367ac9c012e6c2a5e065e201384ec20d9708109)" = "<none>"
+"checksum netlink-sys 0.1.0 (git+https://github.com/mullvad/netlink?rev=b367ac9c012e6c2a5e065e201384ec20d9708109)" = "<none>"
 "checksum nftnl 0.2.0 (git+https://github.com/mullvad/nftnl-rs?rev=86b30cdc38a6d4b30a900c21f7c644857d6f7401)" = "<none>"
 "checksum nftnl-sys 0.2.0 (git+https://github.com/mullvad/nftnl-rs?rev=86b30cdc38a6d4b30a900c21f7c644857d6f7401)" = "<none>"
 "checksum nix 0.11.0 (registry+https://github.com/rust-lang/crates.io-index)" = "d37e713a259ff641624b6cb20e3b12b2952313ba36b6823c0f16e6cfd9e5de17"
@@ -3017,7 +3031,7 @@ dependencies = [
 "checksum remove_dir_all 0.5.1 (registry+https://github.com/rust-lang/crates.io-index)" = "3488ba1b9a2084d38645c4c08276a1752dcbf2c7130d74f1569681ad5d2799c5"
 "checksum resolv-conf 0.6.2 (registry+https://github.com/rust-lang/crates.io-index)" = "b263b4aa1b5de9ffc0054a2386f96992058bb6870aab516f8cdeb8a667d56dcb"
 "checksum rs-release 0.1.7 (git+https://github.com/mullvad/rs-release?branch=snailquote-unescape)" = "<none>"
-"checksum rtnetlink 0.1.1 (git+https://github.com/mullvad/netlink?rev=e629e58797c2d14d7f4777c4ade0d85ee0167027)" = "<none>"
+"checksum rtnetlink 0.1.1 (git+https://github.com/mullvad/netlink?rev=b367ac9c012e6c2a5e065e201384ec20d9708109)" = "<none>"
 "checksum rustc-demangle 0.1.13 (registry+https://github.com/rust-lang/crates.io-index)" = "adacaae16d02b6ec37fdc7acfcddf365978de76d1983d3ee22afc260e1ca9619"
 "checksum rustc_version 0.2.3 (registry+https://github.com/rust-lang/crates.io-index)" = "138e3e0acb6c9fb258b19b67cb8abd63c00679d2851805ea151465464fe9030a"
 "checksum ryu 0.2.7 (registry+https://github.com/rust-lang/crates.io-index)" = "eb9e9b8cde282a9fe6a42dd4681319bfb63f121b8a8ee9439c6f4107e58a46f7"
@@ -3071,6 +3085,7 @@ dependencies = [
 "checksum tokio-process 0.2.3 (registry+https://github.com/rust-lang/crates.io-index)" = "88e1281e412013f1ff5787def044a9577a0bed059f451e835f1643201f8b777d"
 "checksum tokio-proto 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)" = "8fbb47ae81353c63c487030659494b295f6cb6576242f907f203473b191b0389"
 "checksum tokio-reactor 0.1.9 (registry+https://github.com/rust-lang/crates.io-index)" = "6af16bfac7e112bea8b0442542161bfc41cbfa4466b580bdda7d18cb88b911ce"
+"checksum tokio-retry 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)" = "9c03755b956458582182941061def32b8123a26c98b08fc6ddcf49ae89d18f33"
 "checksum tokio-service 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)" = "24da22d077e0f15f55162bdbdc661228c1581892f52074fb242678d015b45162"
 "checksum tokio-signal 0.2.7 (registry+https://github.com/rust-lang/crates.io-index)" = "dd6dc5276ea05ce379a16de90083ec80836440d5ef8a6a39545a3207373b8296"
 "checksum tokio-sync 0.1.4 (registry+https://github.com/rust-lang/crates.io-index)" = "fda385df506bf7546e70872767f71e81640f1f251bdf2fd8eb81a0eaec5fe022"

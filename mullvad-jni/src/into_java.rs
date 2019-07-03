@@ -1,8 +1,8 @@
 use crate::get_class;
 use ipnetwork::IpNetwork;
 use jni::{
-    objects::{JList, JObject, JString, JValue},
-    signature::JavaType,
+    objects::{JObject, JString, JValue},
+    signature::{JavaType, Primitive},
     sys::{jboolean, jint, jshort, jsize},
     JNIEnv,
 };
@@ -12,11 +12,12 @@ use mullvad_types::{
     relay_constraints::{Constraint, LocationConstraint, RelayConstraints, RelaySettings},
     relay_list::{Relay, RelayList, RelayListCity, RelayListCountry},
     settings::Settings,
+    states::TunnelState,
     CustomTunnelEndpoint,
 };
 use std::{fmt::Debug, net::IpAddr};
 use talpid_core::tunnel::tun_provider::TunConfig;
-use talpid_types::{net::wireguard::PublicKey, tunnel::TunnelStateTransition};
+use talpid_types::net::wireguard::PublicKey;
 
 pub trait IntoJava<'env> {
     type JavaType;
@@ -63,14 +64,21 @@ where
             .new_object(&class, "(I)V", &parameters)
             .expect("Failed to create ArrayList object");
 
-        let list =
-            JList::from_env(env, list_object).expect("Failed to create JList from ArrayList");
+        let list_class = get_class("java/util/List");
+        let add_method = env
+            .get_method_id(&list_class, "add", "(Ljava/lang/Object;)Z")
+            .expect("Failed to get List.add(Object) method id");
 
         for element in self {
             let java_element = env.auto_local(JObject::from(element.into_java(env)));
 
-            list.add(java_element.as_obj())
-                .expect("Failed to add element to ArrayList");
+            env.call_method_unchecked(
+                list_object,
+                add_method,
+                JavaType::Primitive(Primitive::Boolean),
+                &[JValue::Object(java_element.as_obj())],
+            )
+            .expect("Failed to add element to ArrayList");
         }
 
         list_object
@@ -453,24 +461,33 @@ impl<'env> IntoJava<'env> for Settings {
     }
 }
 
-impl<'env> IntoJava<'env> for TunnelStateTransition {
+impl<'env> IntoJava<'env> for TunnelState {
     type JavaType = JObject<'env>;
 
     fn into_java(self, env: &JNIEnv<'env>) -> Self::JavaType {
-        let variant = match self {
-            TunnelStateTransition::Disconnected => "Disconnected",
-            TunnelStateTransition::Connecting(_) => "Connecting",
-            TunnelStateTransition::Connected(_) => "Connected",
-            TunnelStateTransition::Disconnecting(_) => "Disconnecting",
-            TunnelStateTransition::Blocked(_) => "Blocked",
+        let (variant, location) = match self {
+            TunnelState::Disconnected => ("Disconnected", None),
+            TunnelState::Connecting { location, .. } => ("Connecting", Some(location)),
+            TunnelState::Connected { location, .. } => ("Connected", Some(location)),
+            TunnelState::Disconnecting(_) => ("Disconnecting", None),
+            TunnelState::Blocked(_) => ("Blocked", None),
         };
 
         let class = get_class(&format!(
-            "net/mullvad/mullvadvpn/model/TunnelStateTransition${}",
+            "net/mullvad/mullvadvpn/model/TunnelState${}",
             variant
         ));
 
-        env.new_object(&class, "()V", &[])
-            .expect("Failed to create TunnelStateTransition sub-class variant Java object")
+        match location {
+            Some(location) => {
+                let location = env.auto_local(location.into_java(env));
+                let parameters = [JValue::Object(location.as_obj())];
+                let signature = "(Lnet/mullvad/mullvadvpn/model/GeoIpLocation;)V";
+
+                env.new_object(&class, signature, &parameters)
+            }
+            None => env.new_object(&class, "()V", &[]),
+        }
+        .expect("Failed to create TunnelState sub-class variant Java object")
     }
 }
