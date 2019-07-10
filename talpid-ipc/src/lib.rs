@@ -120,6 +120,8 @@ pub struct CloseHandle(jsonrpc_ipc_server::CloseHandle);
 
 impl CloseHandle {
     pub fn close(self) {
-        self.0.close();
+//        Modify by YanBowen
+//        TODO find where call this.
+//        self.0.close();
     }
 }
