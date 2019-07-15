@@ -24,14 +24,37 @@ Line wrap the file at 100 chars.                                              Th
 
 ## [Unreleased]
 ### Added
+- Add simplified Chinese translations.
+
+
+## [2019.6-beta1] - 2019-07-08
+### Added
 - Add a switch to turn off system notifications under Preferences in the GUI.
+- Add new settings page for generating and verifying wireguard keys.
 
 #### Windows
 - Add migration logic to restore lost settings after major Windows update.
 
+#### macOS
+- Add the Mullvad CLI frontend and problem report CLI tool to the PATH, so it can be
+  run directly from a terminal.
+
+### Fixed
+- Fix the mix of traditional and simplified Chinese. Separating them to two locales and fall back
+  to English where translations are missing.
+
+#### Windows
+- Adjust network interface checks in offline detection logic. Prevents the app from being stuck
+  in the offline state when the computer is in fact online.
+
+#### Linux
+- Fix some netlink packet parsing error in DNS handling.
+- Improve offline check so if it fails, it always fails as online.
+
+
 ## [2019.5] - 2019-06-17
 ### Added
-- Add Norwegian translations
+- Add Norwegian translations.
 
 
 ## [2019.5-beta1] - 2019-06-13

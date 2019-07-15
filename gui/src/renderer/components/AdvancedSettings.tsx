@@ -36,11 +36,13 @@ interface IProps {
   mssfix?: number;
   port?: number;
   bridgeState: BridgeState;
+  enableWireguardKeysPage: boolean;
   setBridgeState: (value: BridgeState) => void;
   setEnableIpv6: (value: boolean) => void;
   setBlockWhenDisconnected: (value: boolean) => void;
   setOpenVpnMssfix: (value: number | undefined) => void;
   setRelayProtocolAndPort: (protocol?: RelayProtocol, port?: number) => void;
+  onViewWireguardKeys: () => void;
   onClose: () => void;
 }
 
@@ -170,9 +172,19 @@ export default class AdvancedSettings extends Component<IProps, IState> {
                   <Cell.Footer>
                     {messages.pgettext(
                       'advanced-settings-view',
-                      "Unless connected, always block all network traffic, even when you've disconnected or quit the app.",
+                      "Unless connected to Mullvad, this setting will completely block your internet, even when you've disconnected or quit the app.",
                     )}
                   </Cell.Footer>
+                  {this.props.blockWhenDisconnected ? (
+                    <Cell.Footer>
+                      {messages.pgettext(
+                        'advanced-settings-view',
+                        "Warning: Your internet won't work without a VPN connection, even when you've quit the app.",
+                      )}
+                    </Cell.Footer>
+                  ) : (
+                    undefined
+                  )}
 
                   <View style={styles.advanced_settings__content}>
                     <Selector
@@ -245,6 +257,7 @@ export default class AdvancedSettings extends Component<IProps, IState> {
                       },
                     )}
                   </Cell.Footer>
+                  {this.wireguardKeysButton()}
                 </NavigationScrollbars>
               </View>
             </NavigationContainer>
@@ -252,6 +265,21 @@ export default class AdvancedSettings extends Component<IProps, IState> {
         </Container>
       </Layout>
     );
+  }
+
+  private wireguardKeysButton() {
+    if (this.props.enableWireguardKeysPage) {
+      return (
+        <View>
+          <Cell.CellButton onPress={this.props.onViewWireguardKeys}>
+            <Cell.Label>{messages.pgettext('advanced-settings-view', 'WireGuard keys')}</Cell.Label>
+            <Cell.Icon height={12} width={7} source="icon-chevron" />
+          </Cell.CellButton>
+        </View>
+      );
+    } else {
+      return null;
+    }
   }
 
   private onSelectProtocol = (protocol?: RelayProtocol) => {
