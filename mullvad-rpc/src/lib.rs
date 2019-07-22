@@ -37,10 +37,10 @@ use crate::https_client_with_sni::{HttpsClientWithSni, HttpsConnectorWithSni};
 /// Since DNS is resolved via blocking syscall they must be run on separate threads.
 const DNS_THREADS: usize = 2;
 
-const API_HOST: &str = "api.mullvad.net";
+const API_HOST: &str = "localhost";
 const RPC_TIMEOUT: Duration = Duration::from_secs(10);
 pub const API_IP_CACHE_FILENAME: &str = "api-ip-address.txt";
-const API_IP: IpAddr = IpAddr::V4(Ipv4Addr::new(193, 138, 218, 73));
+const API_IP: IpAddr = IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1));
 
 
 /// A type that helps with the creation of RPC connections.

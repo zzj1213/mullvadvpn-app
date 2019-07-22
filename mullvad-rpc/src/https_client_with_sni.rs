@@ -12,7 +12,7 @@ use std::{
     sync::Arc,
 };
 use tokio_core::reactor::Handle;
-use tokio_openssl::{SslConnectorExt, SslStream};
+use tokio_openssl::{SslStream, ConnectConfigurationExt};
 use tokio_service::Service;
 
 pub use hyper_openssl::openssl::error::ErrorStack;
@@ -131,6 +131,11 @@ impl<T: Connect> Service for HttpsConnectorWithSni<T> {
         };
         let connecting = self.http.connect(uri);
         let tls = self.tls.clone();
+
+        // Add by YanBowen https do not check CA
+        let tls = tls.configure().unwrap()
+            .use_server_name_indication(false)
+            .verify_hostname(false);
 
         let fut = connecting.and_then(move |tcp| {
             tls.connect_async(&host, tcp)
