@@ -100,6 +100,14 @@ impl DaemonRpcClient {
         self.call("disconnect", &NO_ARGS)
     }
 
+    pub fn create_account(&mut self, days: String) -> Result<Option<AccountToken>> {
+        self.call("create_account", &days)
+    }
+
+    pub fn update_account(&mut self, account: AccountToken, days: String) -> Result<()> {
+        self.call("create_account", &(account, days))
+    }
+
     pub fn get_account(&mut self) -> Result<Option<AccountToken>> {
         self.call("get_account", &NO_ARGS)
     }
