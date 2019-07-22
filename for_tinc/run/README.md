@@ -46,10 +46,13 @@ MULLVAD_RESOURCE_DIR
 MULLVAD_SETTINGS_DIR
 
 将当前目录下
+cert.pem
+key.pem         (conductor https key)
+
 api_root_ca.pem             mullvad rpc https ca证书
 ca.crt
 tincd(windows下tincd.exe)
-上级目录下
+以及上级目录下
 relays.json.tinc_example   重命名为relays.json
 拷贝到mullvad-daemon运行目录.
 

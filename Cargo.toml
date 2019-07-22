@@ -1,5 +1,8 @@
 [workspace]
 members = [
+    "conductor-cli",
+    "conductor-core",
+    "conductor-daemon",
     "mullvad-daemon",
     "mullvad-cli",
     "mullvad-problem-report",

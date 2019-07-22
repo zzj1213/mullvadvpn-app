@@ -227,7 +227,7 @@ impl TincCloseHandle {
             if let Err(e) = tinc_plugin::control::stop(
                 self.pid_file.to_str().unwrap()){
                 log::warn!("{}", e);
-                self.child.kill();
+                let _ = self.child.kill();
                 sender_tinc_close();
             };
             Ok(())

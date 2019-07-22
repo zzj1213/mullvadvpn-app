@@ -7,6 +7,10 @@ extern crate serde_derive;
 
 extern crate derive_try_from_primitive;
 
+mod operator;
+pub use operator::TincOperator;
+mod info;
+pub use info::{TincInfo, TincRunMode};
 pub mod tinc_tcp_stream;
 pub mod control;
 pub mod listener;

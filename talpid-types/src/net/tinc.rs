@@ -1,11 +1,41 @@
+use std::str::FromStr;
+use std::net::IpAddr;
+use std::fs::File;
+use std::io::Read;
+
 use crate::net::{Endpoint, GenericTunnelOptions, TransportProtocol, TunnelEndpoint, TunnelType};
 use serde::{Deserialize, Serialize};
 use std::net::SocketAddr;
 
-pub mod domain;
-pub use self::domain::{Info, TincInfo, ProxyInfo, GeoInfo};
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
+pub enum TincRunMode {
+    Client,
+    Proxy,
+}
 
-pub mod net_tool;
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
+pub struct TincInfo {
+    pub ip:         IpAddr,
+    pub vip:        IpAddr,
+    pub pub_key:    String,
+    pub mode:       TincRunMode,
+    pub connect_to: Vec<IpAddr>,
+}
+
+impl TincInfo {
+    pub fn new() -> Self {
+        let ip = IpAddr::from_str("0.0.0.0").unwrap();
+        let vip = IpAddr::from_str("0.0.0.0").unwrap();
+        let pub_key = "".to_string();
+        TincInfo {
+            ip,
+            vip,
+            pub_key,
+            mode: TincRunMode::Client,
+            connect_to: vec![],
+        }
+    }
+}
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize)]
 pub struct TunnelParameters {

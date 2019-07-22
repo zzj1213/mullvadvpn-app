@@ -99,9 +99,23 @@ impl MullvadRpcFactory {
 
     fn api_uri(&mut self) -> String {
         let ip = self.cached_dns_resolver.resolve().to_string();
-        format!("https://{}/rpc/", ip)
+        format!("https://{}:8080/rpc/", ip)
     }
 }
+
+// Account option add by YanBowen
+jsonrpc_client!(pub struct AccountCreate {
+    pub fn account_create(&mut self, days: String) -> RpcRequest<String>;
+});
+
+jsonrpc_client!(pub struct AccountUpdate {
+    pub fn account_update(&mut self, account_token: AccountToken, days: String) -> RpcRequest<()>;
+});
+
+jsonrpc_client!(pub struct Accountremove {
+    pub fn account_remove(&mut self, account_token: AccountToken) -> RpcRequest<()>;
+});
+//
 
 jsonrpc_client!(pub struct AccountsProxy {
     pub fn get_expiry(&mut self, account_token: AccountToken) -> RpcRequest<DateTime<Utc>>;

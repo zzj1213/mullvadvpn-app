@@ -1,13 +1,7 @@
 use std::net::{SocketAddr, TcpListener, TcpStream, Shutdown};
 use std::io::{Error, ErrorKind, Result, Read};
-use std::collections::HashMap;
 use std::sync::mpsc;
 use std::thread;
-
-use futures::{sync::oneshot, Future};
-use tokio;
-
-use jsonrpc_client_core::Transport;
 
 extern crate talpid_ipc;
 
