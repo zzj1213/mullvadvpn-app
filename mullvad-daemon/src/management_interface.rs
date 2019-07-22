@@ -40,6 +40,16 @@ build_rpc_trait! {
     pub trait ManagementInterfaceApi {
         type Metadata;
 
+        // add by YanBowen
+        /// Return new create
+        #[rpc(meta, name = "create_account")]
+        fn create_account(&self, Self::Metadata, String) -> BoxFuture<AccountToken, Error>;
+
+        // add by YanBowen
+        /// Return new create
+        #[rpc(meta, name = "update_account")]
+        fn update_account(&self, Self::Metadata, AccountToken, String) -> BoxFuture<(), Error>;
+
         /// Fetches and returns metadata about an account. Returns an error on non-existing
         /// accounts.
         #[rpc(meta, name = "get_account_data")]
@@ -170,6 +180,18 @@ build_rpc_trait! {
 
 /// Enum representing commands coming in on the management interface.
 pub enum ManagementCommand {
+    //Add by YanBowen
+    CreateAccount(
+        OneshotSender<BoxFuture<AccountToken, mullvad_rpc::Error>>,
+        AccountToken,
+    ),
+
+    //Add by YanBowen
+    UpdateAccount(
+        OneshotSender<BoxFuture<(), mullvad_rpc::Error>>,
+        (AccountToken, String),
+    ),
+
     /// Change target state.
     SetTargetState(OneshotSender<Result<(), ()>>, TargetState),
     /// Request the current state.
@@ -380,6 +402,46 @@ impl<T: From<ManagementCommand> + 'static + Send> ManagementInterfaceApi
                 rpc_future.map_err(|error: mullvad_rpc::Error| {
                     log::error!(
                         "Unable to get account data from API: {}",
+                        error.display_chain()
+                    );
+                    Self::map_rpc_error(&error)
+                })
+            });
+        Box::new(future)
+    }
+
+    // add by YanBowen
+    fn create_account(&self,
+                      _: Self::Metadata,
+                      days: String) -> BoxFuture<AccountToken, Error> {
+        log::debug!("create_account");
+        let (tx, rx) = sync::oneshot::channel();
+        let future = self
+            .send_command_to_daemon(ManagementCommand::CreateAccount(tx, days))
+            .and_then(|_| rx.map_err(|_| Error::internal_error()))
+            .and_then(|rpc_future| {
+                rpc_future.map_err(|error: mullvad_rpc::Error| {
+                    log::error!(
+                        "Unable to create account from API: {}",
+                        error.display_chain()
+                    );
+                    Self::map_rpc_error(&error)
+                })
+            });
+        Box::new(future)
+    }
+
+    // add by YanBowen
+    fn update_account(&self, _: Self::Metadata, account: AccountToken, days: String) -> BoxFuture<(), Error> {
+        log::debug!("update_account");
+        let (tx, rx) = sync::oneshot::channel();
+        let future = self
+            .send_command_to_daemon(ManagementCommand::UpdateAccount(tx, (account, days)))
+            .and_then(|_| rx.map_err(|_| Error::internal_error()))
+            .and_then(|rpc_future| {
+                rpc_future.map_err(|error: mullvad_rpc::Error| {
+                    log::error!(
+                        "Unable to update account from API: {}",
                         error.display_chain()
                     );
                     Self::map_rpc_error(&error)

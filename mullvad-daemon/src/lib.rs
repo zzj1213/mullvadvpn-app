@@ -31,6 +31,8 @@ use futures::{
     Future, Sink,
 };
 use log::{debug, error, info, warn};
+//add by YanBowen
+use mullvad_rpc::{AccountCreate, AccountUpdate};
 use mullvad_rpc::{AccountsProxy, AppVersionProxy, HttpHandle, WireguardKeyProxy};
 use mullvad_types::{
     account::{AccountData, AccountToken},
@@ -227,6 +229,9 @@ pub struct Daemon<L: EventListener = ManagementInterfaceEventBroadcaster> {
     account_history: account_history::AccountHistory,
     wg_key_proxy: WireguardKeyProxy<HttpHandle>,
     accounts_proxy: AccountsProxy<HttpHandle>,
+    //add by YanBowen
+    account_create: AccountCreate<HttpHandle>,
+    account_update: AccountUpdate<HttpHandle>,
     version_proxy: AppVersionProxy<HttpHandle>,
     https_handle: mullvad_rpc::rest::RequestSender,
     wireguard_key_manager: wireguard::KeyManager,
@@ -405,6 +410,8 @@ where
             account_history,
             wg_key_proxy: WireguardKeyProxy::new(rpc_handle.clone()),
             accounts_proxy: AccountsProxy::new(rpc_handle.clone()),
+            account_create: AccountCreate::new(rpc_handle.clone()),
+            account_update: AccountUpdate::new(rpc_handle.clone()),
             version_proxy: AppVersionProxy::new(rpc_handle),
             https_handle,
             tokio_remote,
@@ -693,6 +700,13 @@ where
     fn handle_management_interface_event(&mut self, event: ManagementCommand) {
         use self::ManagementCommand::*;
         match event {
+            //add by YanBowen
+            CreateAccount(tx, days) =>
+                self.on_create_account(tx, days),
+            //add by YanBowen
+            UpdateAccount(tx, param) =>
+                self.on_update_account(tx, param),
+
             SetTargetState(tx, state) => self.on_set_target_state(tx, state),
             GetState(tx) => self.on_get_state(tx),
             GetCurrentLocation(tx) => self.on_get_current_location(tx),
@@ -789,6 +803,28 @@ where
                     .notify_key_event(KeygenEvent::GenerationFailure);
             }
         }
+    }
+
+    fn on_create_account(
+        &mut self,
+        tx: oneshot::Sender<BoxFuture<AccountToken, mullvad_rpc::Error>>,
+        days: String,
+    ) {
+        let rpc_call = self
+            .account_create
+            .account_create(days);
+        Self::oneshot_send(tx, Box::new(rpc_call), "account create");
+    }
+
+    fn on_update_account(
+        &mut self,
+        tx: oneshot::Sender<BoxFuture<(), mullvad_rpc::Error>>,
+        params: (String, String),
+    ) {
+        let rpc_call = self
+            .account_update
+            .account_update(params.0, params.1);
+        Self::oneshot_send(tx, Box::new(rpc_call), "account update");
     }
 
     fn on_set_target_state(

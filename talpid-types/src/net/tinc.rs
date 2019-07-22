@@ -1,11 +1,8 @@
 use std::str::FromStr;
 use std::net::IpAddr;
-use std::fs::File;
-use std::io::Read;
 
-use crate::net::{Endpoint, GenericTunnelOptions, TransportProtocol, TunnelEndpoint, TunnelType};
+use crate::net::{Endpoint, GenericTunnelOptions, TunnelEndpoint, TunnelType};
 use serde::{Deserialize, Serialize};
-use std::net::SocketAddr;
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
 pub enum TincRunMode {

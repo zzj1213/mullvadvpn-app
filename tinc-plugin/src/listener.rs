@@ -47,9 +47,9 @@ fn listen(addr: SocketAddr, tinc_event_tx: mpsc::Sender<EventType>) {
         if let Ok(mut stream) = res_stream {
             if let Ok(event) = handle_client(&mut stream) {
                 log::info!("Tinc event {:?}", event);
-                tinc_event_tx.send(event.clone());
+                let _ = tinc_event_tx.send(event.clone());
                 if event == EventType::Down {
-                    stream.shutdown(Shutdown::Both);
+                    let _ = stream.shutdown(Shutdown::Both);
                     break;
                 }
             }
