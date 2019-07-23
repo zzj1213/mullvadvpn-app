@@ -89,12 +89,12 @@ fn rpc_select(
         "account_update" => {
             let acc = match params[0].as_str() {
                 Some(x) => x,
-                None => return Err(convention::ErrorData::new(404, "Error params")),
+                None => return Err(convention::ErrorData::new(400, "Error params")),
             };
 
             let days_str = match params[1].as_str() {
                 Some(x) => x,
-                None => return Err(convention::ErrorData::new(404, "Error params")),
+                None => return Err(convention::ErrorData::new(400, "Error params")),
             };
             let days: i64 = match days_str.parse() {
                 Ok(x) => x,
@@ -107,17 +107,17 @@ fn rpc_select(
         "account_remove" => {
             let acc = match params[0].as_str() {
                 Some(x) => x,
-                None => return Err(convention::ErrorData::new(404, "Error params")),
+                None => return Err(convention::ErrorData::new(400, "Error params")),
             };
 
             AccountOperator::remove_account(acc);
             let r = serde_json::to_value(()).unwrap();
             return Ok(r);
         }
-        "client_link" => {
+        "push_tinc_key" => {
             let acc = match params[0].as_str() {
                 Some(x) => x,
-                None => return Err(convention::ErrorData::new(404, "Error params")),
+                None => return Err(convention::ErrorData::new(400, "Error params")),
             };
 
             let db = Database::instance();
@@ -131,15 +131,16 @@ fn rpc_select(
 
             let pubkey = match params[1].as_str() {
                 Some(x) => x,
-                None => return Err(convention::ErrorData::new(404, "Error params")),
+                None => return Err(convention::ErrorData::new(400, "Error params")),
             };
 
-            let vip = match params[2].as_str() {
-                Some(x) => x,
-                None => return Err(convention::ErrorData::new(404, "Error params")),
+            let vip_num: u32 = match ("1".to_string() + &acc[1..]).parse() {
+                Ok(x) => x,
+                Err(_) => return Err(convention::ErrorData::new(400, "Error params")),
             };
+            let vip = IpAddr::from(Ipv4Addr::from(vip_num)).to_string();
 
-            if let Err(_) = TincOperator::instance().add_hosts(vip, pubkey) {
+            if let Err(_) = TincOperator::instance().add_hosts(&vip, pubkey) {
                 return Err(convention::ErrorData::new(500, "Set host file failed."));
             };
             let local_pubkey = TincOperator::instance().get_pub_key().unwrap();
@@ -347,7 +348,7 @@ fn main() {
         .get_matches();
 
     // TODO mullvad path
-    TincOperator::new("./".to_string(), TincRunMode::Proxy);
+    TincOperator::new("./", TincRunMode::Proxy);
 
     web_server();
 }

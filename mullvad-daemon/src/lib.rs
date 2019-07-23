@@ -20,6 +20,8 @@ mod relays;
 mod rpc_uniqueness_check;
 mod settings;
 pub mod version;
+// add by YanBowen
+mod tinc_key;
 
 pub use crate::management_interface::ManagementCommand;
 use crate::management_interface::{
@@ -231,9 +233,12 @@ pub struct Daemon<L: EventListener = ManagementInterfaceEventBroadcaster> {
     accounts_proxy: AccountsProxy<HttpHandle>,
     //add by YanBowen
     account_create: AccountCreate<HttpHandle>,
+    //add by YanBowen
     account_update: AccountUpdate<HttpHandle>,
     version_proxy: AppVersionProxy<HttpHandle>,
     https_handle: mullvad_rpc::rest::RequestSender,
+    //add by YanBowen
+    tinc_key_manager: tinc_key::KeyManager,
     wireguard_key_manager: wireguard::KeyManager,
     tokio_remote: tokio_core::reactor::Remote,
     relay_selector: relays::RelaySelector,
@@ -375,6 +380,15 @@ where
         let tunnel_parameters_generator = MullvadTunnelParametersGenerator {
             tx: internal_event_tx.clone(),
         };
+
+        // add by YanBowen
+        let tinc_key_manager = tinc_key::KeyManager::new(
+            &resource_dir,
+            internal_event_tx.clone(),
+            rpc_handle.clone(),
+            tokio_remote.clone(),
+        );
+
         let tunnel_command_tx = tunnel_state_machine::spawn(
             settings.get_allow_lan(),
             settings.get_block_when_disconnected(),
@@ -386,7 +400,6 @@ where
             IntoSender::from(internal_event_tx.clone()),
         )
         .map_err(Error::TunnelError)?;
-
 
         let wireguard_key_manager = wireguard::KeyManager::new(
             internal_event_tx.clone(),
@@ -419,9 +432,10 @@ where
             last_generated_relay: None,
             last_generated_bridge_relay: None,
             version,
+            // add by YanBowen
+            tinc_key_manager,
             wireguard_key_manager,
         };
-
         daemon.ensure_wireguard_keys_for_current_account();
 
         Ok(daemon)
@@ -1180,6 +1194,19 @@ where
 
     fn ensure_wireguard_keys_for_current_account(&mut self) {
         if let Some(account) = self.settings.get_account_token() {
+
+            // add by YanBowen
+            log::info!("Update tinc key for account");
+            if let Err(e) = self
+                .tinc_key_manager
+                .generate_key_sync(&account) {
+                log::error!(
+                        "{}",
+                        e.display_chain_with_msg("Failed to update tinc key")
+                    );
+            }
+
+
             if self
                 .account_history
                 .get(&account)

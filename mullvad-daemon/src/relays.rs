@@ -1,11 +1,5 @@
 // Add allowed temple by YanBowen
 // for temple remove relays.json update
-// TODO remove allows
-#![allow(dead_code)]
-#![allow(unused_imports)]
-#![allow(unused_variables)]
-#![allow(unknown_lints)]
-#![allow(unreachable_patterns)]
 
 use chrono::{DateTime, Local};
 use futures::Future;
@@ -197,10 +191,9 @@ impl RelaySelector {
 
     /// Download the newest relay list.
     pub fn update(&self) {
-        // remove by YanBowen
-//        self.updater
-//            .send(())
-//            .expect("Relay list updated thread has stopped unexpectedly");
+        self.updater
+            .send(())
+            .expect("Relay list updated thread has stopped unexpectedly");
     }
 
     /// Returns all countries and cities. The cities in the object returned does not have any
@@ -656,7 +649,6 @@ struct RelayListUpdater {
     close_handle: mpsc::Receiver<()>,
 }
 
-// modify by YanBowen
 #[allow(unused_variables)]
 impl RelayListUpdater {
     pub fn spawn(
@@ -667,11 +659,9 @@ impl RelayListUpdater {
     ) -> RelayListUpdaterHandle {
         let (tx, rx) = mpsc::channel();
 
-//        modify by YanBowen
-//        thread::spawn(move || {
-//            Self::new(rpc_handle, cache_path, parsed_relays, on_update, rx).run()
-//        });
-
+        thread::spawn(move || {
+            Self::new(rpc_handle, cache_path, parsed_relays, on_update, rx).run()
+        });
         tx
     }
 

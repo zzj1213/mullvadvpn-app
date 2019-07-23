@@ -119,9 +119,9 @@ pub struct TincOperator {
 
 impl TincOperator {
     /// 获取tinc home dir 创建tinc操作。
-    pub fn new(tinc_home: String, mode: TincRunMode) {
+    pub fn new(tinc_home: &str, mode: TincRunMode) {
         let operator = TincOperator {
-            tinc_home,
+            tinc_home:      tinc_home.to_string() + "/tinc/",
             tinc_handle:    None,
             mutex:          Mutex::new(0),
         };

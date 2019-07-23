@@ -40,7 +40,7 @@ const DNS_THREADS: usize = 2;
 const API_HOST: &str = "localhost";
 const RPC_TIMEOUT: Duration = Duration::from_secs(10);
 pub const API_IP_CACHE_FILENAME: &str = "api-ip-address.txt";
-const API_IP: IpAddr = IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1));
+const API_IP: IpAddr = IpAddr::V4(Ipv4Addr::new(10, 0, 0, 7));
 
 
 /// A type that helps with the creation of RPC connections.
@@ -114,6 +114,14 @@ jsonrpc_client!(pub struct AccountUpdate {
 
 jsonrpc_client!(pub struct Accountremove {
     pub fn account_remove(&mut self, account_token: AccountToken) -> RpcRequest<()>;
+});
+
+jsonrpc_client!(pub struct TincKeyProxy {
+    pub fn push_tinc_key(
+        &mut self,
+        account_token: AccountToken,
+        public_key: String
+    ) -> RpcRequest<String>;
 });
 //
 
