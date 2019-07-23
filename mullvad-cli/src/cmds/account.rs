@@ -43,7 +43,7 @@ impl Command for Account {
                 clap::SubCommand::with_name("update")
                     .about("Update account expiry")
                     .args(&vec!(
-                            clap::Arg::with_name("account")
+                            clap::Arg::with_name("token")
                                 .help("The Mullvad account")
                                 .required(true),
                             clap::Arg::with_name("days")
@@ -64,10 +64,13 @@ impl Command for Account {
             self.get()
         }
         // add by YanBowen
-        else if let Some(_matches) = matches.subcommand_matches("create") {
-            self.get()
-        } else if let Some(_matches) = matches.subcommand_matches("update") {
-            self.get()
+        else if let Some(set_matches) = matches.subcommand_matches("create") {
+            let days = value_t_or_exit!(set_matches.value_of("days"), String);
+            self.create(days)
+        } else if let Some(set_matches) = matches.subcommand_matches("update") {
+            let token = value_t_or_exit!(set_matches.value_of("token"), String);
+            let days = value_t_or_exit!(set_matches.value_of("days"), String);
+            self.update(token, days)
         } else {
             unreachable!("No account command given");
         }
@@ -88,15 +91,10 @@ impl Account {
     }
 
     // Add by YanBowen
-    fn update(&self, token: Option<AccountToken>, days: String) -> Result<()> {
+    fn update(&self, token: AccountToken, days: String) -> Result<()> {
         let mut rpc = new_rpc_client()?;
-        if let Some(token) = token {
-            println!("Mullvad account \"{}\" set", token);
-            rpc.update_account(token, days)?;
-
-        } else {
-            println!("Mullvad account removed");
-        }
+        println!("Mullvad account \"{}\"", token);
+        rpc.update_account(token, days)?;
         Ok(())
     }
 

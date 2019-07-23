@@ -1,3 +1,8 @@
+#![allow(unused_mut)]
+#![allow(dead_code)]
+#![allow(unused_variables)]
+#![allow(unreachable_patterns)]
+
 use std::ffi::OsString;
 use std::fs;
 use std::io::{self, Write, Read};

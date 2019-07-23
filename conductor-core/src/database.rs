@@ -5,7 +5,6 @@ use std::collections::HashMap;
 use std::str::FromStr;
 use std::sync::Mutex;
 
-use chrono::{offset::Utc, DateTime};
 use serde_json;
 
 use crate::types::AccountInfo;
