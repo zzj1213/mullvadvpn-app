@@ -198,7 +198,7 @@ impl TincOperator {
     }
 
     /// 根据IP地址获取文件名
-    pub fn get_filename_by_ip(&self, ip: &str) -> String {
+    pub fn get_filename_by_ip(ip: &str) -> String {
         let splits = ip.split(".").collect::<Vec<&str>>();
         let mut filename = String::new();
         filename.push_str(splits[0]);
@@ -212,7 +212,7 @@ impl TincOperator {
     }
 
     /// 根据IP地址获取文件名
-    pub fn get_client_filename_by_virtual_ip(&self, virtual_ip: &str) -> String {
+    pub fn get_client_filename_by_virtual_ip(virtual_ip: &str) -> String {
         let splits = virtual_ip.split(".").collect::<Vec<&str>>();
         let mut filename = String::new();
         filename.push_str(splits[1]);
@@ -326,12 +326,12 @@ impl TincOperator {
     fn set_tinc_conf_file(&self, tinc_info: &TincInfo) -> Result<()> {
         let _guard = self.mutex.lock().unwrap();
         let name = "proxy".to_string() + "_"
-            + &self.get_filename_by_ip(&tinc_info.ip.to_string());
+            + &Self::get_filename_by_ip(&tinc_info.ip.to_string());
 
         let mut connect_to: Vec<String> = vec![];
         for online_proxy in tinc_info.connect_to.clone() {
             let online_proxy_name = "proxy".to_string() + "_"
-                + &self.get_filename_by_ip(&online_proxy.ip.to_string());
+                + &Self::get_filename_by_ip(&online_proxy.ip.to_string());
             connect_to.push(online_proxy_name);
         }
 
@@ -422,7 +422,7 @@ impl TincOperator {
                 + "Port=50069\n\
                 ";
             let file_name = proxy_or_client.to_string()
-                + "_" + &self.get_filename_by_ip(ip);
+                + "_" + &Self::get_filename_by_ip(ip);
 
             let path = self.tinc_home.clone() + "/hosts/" + &file_name;
             let mut file = fs::File::create(path.clone())
@@ -457,7 +457,7 @@ impl TincOperator {
     pub fn check_self_hosts_file(&self, tinc_home: &str, tinc_info: &TincInfo) -> Result<()> {
         let _guard = self.mutex.lock().unwrap();
         let ip = tinc_info.ip.to_string();
-        let filename = self.get_filename_by_ip(&ip);
+        let filename = Self::get_filename_by_ip(&ip);
 
         let path = tinc_home.to_string()
             + "/hosts/"

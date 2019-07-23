@@ -117,7 +117,7 @@ fn rpc_select(
         "push_tinc_key" => {
             let acc = match params[0].as_str() {
                 Some(x) => x,
-                None => return Err(convention::ErrorData::new(400, "Error params")),
+                None => return Err(convention::ErrorData::new(400, "Error account param")),
             };
 
             let db = Database::instance();
@@ -131,16 +131,17 @@ fn rpc_select(
 
             let pubkey = match params[1].as_str() {
                 Some(x) => x,
-                None => return Err(convention::ErrorData::new(400, "Error params")),
+                None => return Err(convention::ErrorData::new(400, "Error pubkey param")),
             };
 
-            let vip_num: u32 = match ("1".to_string() + &acc[1..]).parse() {
+            let vip_num: u32 = match ("1".to_string() + &acc[4..]).parse() {
                 Ok(x) => x,
                 Err(_) => return Err(convention::ErrorData::new(400, "Error params")),
             };
             let vip = IpAddr::from(Ipv4Addr::from(vip_num)).to_string();
 
-            if let Err(_) = TincOperator::instance().add_hosts(&vip, pubkey) {
+            let host_name = TincOperator::get_client_filename_by_virtual_ip(&vip);
+            if let Err(_) = TincOperator::instance().add_hosts(&host_name, pubkey) {
                 return Err(convention::ErrorData::new(500, "Set host file failed."));
             };
             let local_pubkey = TincOperator::instance().get_pub_key().unwrap();
@@ -348,7 +349,7 @@ fn main() {
         .get_matches();
 
     // TODO mullvad path
-    TincOperator::new("./", TincRunMode::Proxy);
+    TincOperator::new("/root/mullvadvpn-app/", TincRunMode::Proxy);
 
     web_server();
 }

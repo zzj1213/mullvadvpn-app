@@ -7,13 +7,12 @@ use std::fs;
 use std::io::{self, Write, Read};
 use std::ffi::OsString;
 #[cfg(unix)]
-use std::os::unix::fs::PermissionsExt;
 use std::net::IpAddr;
 use std::str::FromStr;
 
 use openssl::rsa::Rsa;
 
-use tinc_plugin::{TincInfo, TincRunMode};
+use tinc_plugin::TincInfo;
 
 /// Results from fallible operations on the Tinc tunnel.
 pub type Result<T> = std::result::Result<T, Error>;
