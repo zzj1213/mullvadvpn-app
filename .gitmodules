@@ -9,4 +9,4 @@
 	url = https://github.com/mullvad/googletest
 [submodule "dist-assets/binaries"]
 	path = dist-assets/binaries
-	url = https://github.com/zzj1213/mullvadvpn-app-binaries
+	url = https://github.com/mullvad/mullvadvpn-app-binaries
