@@ -277,7 +277,7 @@ fn web_server() {
             .wrap(middleware::Logger::default())
             .service(web::resource("/rpc/").route(web::post().to_async(rpc_handler)))
     })
-        .bind_ssl("0.0.0.0:8080", builder)
+        .bind_ssl("0.0.0.0:50071", builder)
         .unwrap()
         .workers(1)
         .start();

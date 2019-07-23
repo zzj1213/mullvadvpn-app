@@ -13,7 +13,7 @@ use std::str::FromStr;
 
 use openssl::rsa::Rsa;
 
-use talpid_types::net::tinc::TincInfo;
+use tinc_plugin::{TincInfo, TincRunMode};
 
 /// Results from fallible operations on the Tinc tunnel.
 pub type Result<T> = std::result::Result<T, Error>;
@@ -276,82 +276,6 @@ impl TincOperator {
         return Ok(out);
     }
 
-    /// 通过Info修改tinc.conf
-//    fn set_tinc_conf_file(&self, info: &Info) -> Result<()> {
-//        let name = "proxy".to_string() + "_"
-//            + &self.get_filename_by_ip(&info.proxy_info.proxy_ip);
-//
-//        let mut connect_to: Vec<String> = vec![];
-//        for online_proxy in info.proxy_info.online_porxy.clone() {
-//            let online_proxy_name = "proxy".to_string() + "_"
-//                + &self.get_filename_by_ip(&online_proxy.ip.to_string());
-//            connect_to.push(online_proxy_name);
-//        }
-//
-//
-//        let mut buf_connect_to = String::new();
-//        for other in connect_to {
-//            let buf = "ConnectTo = ".to_string() + &other + "\n\
-//            ";
-//            buf_connect_to += &buf;
-//        }
-//        let buf :String = "Name = ".to_string() + &name + "\n\
-//        " + &buf_connect_to
-//            + "DeviceType=tap\n\
-//        Mode=switch\n\
-//        Interface=tun0\n\
-//        Device = /dev/net/tun\n\
-//        BindToAddress = * 50069\n\
-//        ProcessPriority = high\n\
-//        PingTimeout=10";
-//        let mut file = fs::File::create(self.tinc_home.clone() + "/tinc.conf")
-//            .map_err(|e|Error::FileCreateError(e.to_string()))?;
-//        file.write(buf.as_bytes())
-//            .map_err(|e|Error::FileNotExist(e.to_string()))?;
-//        return Ok(());
-//    }
-
-    /// 检查info中的配置, 并与实际运行的tinc配置对比, 如果不同修改tinc配置,
-    /// 如果自己的vip修改,重启tinc
-//    pub fn check_info(&mut self, info: &Info) -> Result<()> {
-//        let mut need_restart = false;
-//        {
-//            let file_vip = self.get_vip()?;
-//            if file_vip != info.tinc_info.vip.to_string() {
-//                log::debug!("tinc operator check_info local {}, remote {}",
-//                       file_vip,
-//                       info.tinc_info.vip.to_string());
-//
-//                self.change_vip(info.tinc_info.vip.to_string())?;
-//
-//                self.set_hosts(true,
-//                                   &info.proxy_info.proxy_ip.to_string(),
-//                                   &info.tinc_info.pub_key)?;
-//
-//                need_restart = true;
-//            }
-//        }
-//        {
-//            for online_proxy in info.proxy_info.online_porxy.clone() {
-//                self.set_hosts(true,
-//                                   &online_proxy.ip.to_string(),
-//                                   &online_proxy.pubkey)?;
-//            }
-//        }
-//
-//        self.check_self_hosts_file(&self.tinc_home, &info)?;
-//        self.set_hosts(
-//            true,
-//            &info.proxy_info.proxy_ip,
-//            &info.tinc_info.pub_key)?;
-//
-//        if need_restart {
-//            self.set_tinc_conf_file(&info)?;
-//            self.restart_tinc()?;
-//        }
-//        return Ok(());
-//    }
-
     /// 添加hosts文件
     /// if is_proxy{ 文件名=proxy_10_253_x_x }
     /// else { 文件名=虚拟ip后三位b_c_d }
@@ -398,52 +322,6 @@ impl TincOperator {
         }
         Ok(())
     }
-
-    /// 检测自身hosts文件,是否正确
-//    pub fn check_self_hosts_file(&self, tinc_home: &str, info: &Info) -> Result<()> {
-//        let ip = info.proxy_info.proxy_ip.clone();
-//        let filename = self.get_filename_by_ip(&ip);
-//        fs::File::open(
-//            tinc_home.to_string()
-//                + "/hosts/"
-//                + "proxy_"
-//                + &filename
-//        ).map_err(|e|Error::FileNotExist(e.to_string()))?;
-//        Ok(())
-//    }
-
-    /// 写TINC_AUTH_PATH/TINC_AUTH_FILENAME(auth/auth.txt),用于tinc reporter C程序
-    /// TODO 去除C上报tinc上线信息流程,以及去掉auth/auth.txt.
-//    pub fn write_auth_file(&self,
-//                           server_url:  &str,
-//                           info:        &Info,
-//    ) -> Result<()> {
-//        let auth_dir = path::PathBuf::from(&(self.tinc_home.to_string() + TINC_AUTH_PATH));
-//        if !path::Path::new(&auth_dir).is_dir() {
-//            fs::create_dir_all(&auth_dir)
-//                .map_err(|e|Error::FileNotExist(e.to_string()))?;
-//        }
-//
-//        let file_path_buf = auth_dir.join(TINC_AUTH_FILENAME);
-//        let file_path = path::Path::new(&file_path_buf);
-//
-//        #[cfg(unix)]
-//            {
-//                let permissions = PermissionsExt::from_mode(0o755);
-//                if file_path.is_file() {
-//                    if let Ok(file) = fs::File::open(&file_path) {
-//                        if let Err(_) = file.set_permissions(permissions) {
-//                            ()
-//                        }
-//                    }
-//                } else {
-//                    let file = fs::File::create(&file_path)
-//                        .map_err(|e| Error::FileCreateError(e.to_string()))?;
-//                    let _ = file.set_permissions(permissions);
-//                }
-//            }
-//        return Ok(());
-//    }
 
     /// Load local tinc config file vpnserver for tinc vip and pub_key.
     /// Success return true.
@@ -517,20 +395,5 @@ impl TincOperator {
         file.write(buf.as_bytes())
             .map_err(|e|Error::IoError(e))?;
         Ok(())
-    }
-}
-
-/// 获取出口网卡, 网卡名
-pub fn get_wan_name() -> Result<String> {
-    let output = duct::cmd(OsString::from("/bin/ip"),
-                           vec!(OsString::from("route")))
-        .read()
-        .map_err(|e|Error::FailedToRunIp(e))?;
-    match output
-        .lines()
-        .find(|line|line.trim().starts_with("default via "))
-        .and_then(|line| line.trim().split_whitespace().nth(4)) {
-        Some(dev) => Ok(dev.to_string()),
-        None => Err(Error::NoWanDev)
     }
 }

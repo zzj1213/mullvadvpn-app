@@ -99,7 +99,7 @@ impl MullvadRpcFactory {
 
     fn api_uri(&mut self) -> String {
         let ip = self.cached_dns_resolver.resolve().to_string();
-        format!("https://{}:8080/rpc/", ip)
+        format!("https://{}:50071/rpc/", ip)
     }
 }
 
