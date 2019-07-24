@@ -114,7 +114,8 @@ pub enum Error {
 pub struct TincOperator {
     tinc_home:              String,
     tinc_handle:            Option<duct::Handle>,
-    mutex:                  Mutex<i32>
+    mutex:                  Mutex<i32>,
+    mode:                   TincRunMode,
 }
 
 impl TincOperator {
@@ -124,6 +125,7 @@ impl TincOperator {
             tinc_home:      tinc_home.to_string() + "/tinc/",
             tinc_handle:    None,
             mutex:          Mutex::new(0),
+            mode,
         };
 
         unsafe {
@@ -170,6 +172,10 @@ impl TincOperator {
         Ok(())
     }
 
+    pub fn get_tinc_handle(&mut self) -> Option<duct::Handle> {
+        self.tinc_handle.take()
+    }
+
     pub fn stop_tinc(&mut self) -> Result<()> {
         if let Some(child) = &self.tinc_handle {
             child.kill().map_err(|_|Error::StopTincError)?
@@ -198,23 +204,14 @@ impl TincOperator {
     }
 
     /// 根据IP地址获取文件名
-    pub fn get_filename_by_ip(ip: &str) -> String {
+    pub fn get_filename_by_ip(is_proxy: bool, ip: &str) -> String {
         let splits = ip.split(".").collect::<Vec<&str>>();
         let mut filename = String::new();
-        filename.push_str(splits[0]);
-        filename.push_str("_");
-        filename.push_str(splits[1]);
-        filename.push_str("_");
-        filename.push_str(splits[2]);
-        filename.push_str("_");
-        filename.push_str(splits[3]);
-        filename
-    }
-
-    /// 根据IP地址获取文件名
-    pub fn get_client_filename_by_virtual_ip(virtual_ip: &str) -> String {
-        let splits = virtual_ip.split(".").collect::<Vec<&str>>();
-        let mut filename = String::new();
+        if is_proxy {
+            filename = "proxy".to_string() + "_";
+            filename.push_str(splits[0]);
+            filename.push_str("_");
+        }
         filename.push_str(splits[1]);
         filename.push_str("_");
         filename.push_str(splits[2]);
@@ -270,19 +267,19 @@ impl TincOperator {
     }
 
     /// 从pub_key文件读取pub_key
-    pub fn get_pub_key(&self) -> Result<String> {
+    pub fn get_local_pub_key(&self) -> Result<String> {
         let _guard = self.mutex.lock().unwrap();
         let path = self.tinc_home.clone() + PUB_KEY_FILENAME;
         let mut file =  fs::File::open(path.clone())
             .map_err(|e|Error::IoError(path.clone() + " " + &e.to_string()))?;
-        let buf = &mut [0; 2048];
-        file.read(buf)
+        let mut buf = String::new();
+        file.read_to_string(&mut buf)
             .map_err(|e|Error::IoError(path.clone() + " " + &e.to_string()))?;
-        Ok(String::from_utf8_lossy(buf).to_string())
+        Ok(buf)
     }
 
     /// 修改本地公钥
-    pub fn set_pub_key(&mut self, pub_key: &str) -> Result<()> {
+    pub fn set_local_pub_key(&mut self, pub_key: &str) -> Result<()> {
         let _guard = self.mutex.lock().unwrap();
         let path = self.tinc_home.clone() + PUB_KEY_FILENAME;
         let mut file =  fs::File::create(path.clone())
@@ -293,7 +290,7 @@ impl TincOperator {
     }
 
     /// 获取本地tinc虚拟ip
-    pub fn get_vip(&self) -> Result<String> {
+    pub fn get_local_vip(&self) -> Result<String> {
         let _guard = self.mutex.lock().unwrap();
         let mut out = String::new();
 
@@ -301,10 +298,9 @@ impl TincOperator {
         let mut file = fs::File::open(path.clone())
             .map_err(|e|Error::IoError(path.clone() + " " + &e.to_string()))?;
 
-        let res = &mut [0; 2048];
-        file.read(res)
+        let mut res = String::new();
+        file.read_to_string(&mut res)
             .map_err(|e|Error::IoError(path.clone() + " " + &e.to_string()))?;
-        let res = String::from_utf8_lossy(res);
         #[cfg(unix)]
             let res: Vec<&str> = res.split("vpngw=").collect();
         #[cfg(windows)]
@@ -325,32 +321,37 @@ impl TincOperator {
     /// 通过Info修改tinc.conf
     fn set_tinc_conf_file(&self, tinc_info: &TincInfo) -> Result<()> {
         let _guard = self.mutex.lock().unwrap();
-        let name = "proxy".to_string() + "_"
-            + &Self::get_filename_by_ip(&tinc_info.ip.to_string());
+
+        let (is_proxy, name_ip) = match self.mode {
+            TincRunMode::Proxy => (true, tinc_info.ip.clone()),
+            TincRunMode::Client => (false, tinc_info.vip.clone()),
+        };
+
+        let name = Self::get_filename_by_ip(is_proxy,
+                                            &name_ip.to_string());
 
         let mut connect_to: Vec<String> = vec![];
         for online_proxy in tinc_info.connect_to.clone() {
-            let online_proxy_name = "proxy".to_string() + "_"
-                + &Self::get_filename_by_ip(&online_proxy.ip.to_string());
+            let online_proxy_name = Self::get_filename_by_ip(true,
+                                                             &online_proxy.ip.to_string());
             connect_to.push(online_proxy_name);
         }
 
 
         let mut buf_connect_to = String::new();
         for other in connect_to {
-            let buf = "ConnectTo = ".to_string() + &other + "\n\
-            ";
+            let buf = "ConnectTo = ".to_string() + &other + "\n";
             buf_connect_to += &buf;
         }
-        let buf :String = "Name = ".to_string() + &name + "\n\
-        " + &buf_connect_to
-            + "DeviceType=tap\n\
-        Mode=switch\n\
-        Interface=tun0\n\
-        Device = /dev/net/tun\n\
-        BindToAddress = * 50069\n\
-        ProcessPriority = high\n\
-        PingTimeout=10";
+        let buf :String = "Name = ".to_string() + &name + "\n"
+        + &buf_connect_to
+        + "DeviceType=tap\n\
+            Mode=switch\n\
+            Interface=tun0\n\
+            Device = /dev/net/tun\n\
+            BindToAddress = * 50069\n\
+            ProcessPriority = high\n\
+            PingTimeout=10";
 
         let path = self.tinc_home.clone() + "/tinc.conf";
         let mut file = fs::File::create(path.clone())
@@ -365,13 +366,13 @@ impl TincOperator {
     pub fn check_info(&mut self, tinc_info: &TincInfo) -> Result<()> {
         let mut need_restart = false;
         {
-            let file_vip = self.get_vip()?;
+            let file_vip = self.get_local_vip()?;
             if file_vip != tinc_info.vip.to_string() {
                 log::debug!("tinc operator check_info local {}, remote {}",
                        file_vip,
                        tinc_info.vip.to_string());
 
-                self.change_vip(tinc_info.vip.to_string())?;
+                self.set_tinc_up(&tinc_info)?;
 
                 self.set_hosts(true,
                                    &tinc_info.ip.to_string(),
@@ -404,47 +405,26 @@ impl TincOperator {
     /// 添加hosts文件
     /// if is_proxy{ 文件名=proxy_10_253_x_x }
     /// else { 文件名=虚拟ip后三位b_c_d }
-    fn set_hosts(&self,
-                 is_proxy: bool,
-                 ip: &str,
-                 pubkey: &str) -> Result<()> {
+    pub fn set_hosts(&self,
+                     is_proxy: bool,
+                     ip: &str,
+                     pubkey: &str)
+        -> Result<()>
+    {
         let _guard = self.mutex.lock().unwrap();
         {
-            let mut proxy_or_client = "proxy".to_string();
-            if !is_proxy {
-                proxy_or_client = "CLIENT".to_string();
+            let mut buf;
+            if is_proxy {
+                buf = "Address=".to_string() + ip + "\n"
+                    + "Port=50069\n"
+                    + pubkey;
             }
-            let buf = "Address=".to_string()
-                + ip
-                + "\n\
-                "
-                + pubkey
-                + "Port=50069\n\
-                ";
-            let file_name = proxy_or_client.to_string()
-                + "_" + &Self::get_filename_by_ip(ip);
+            else {
+                buf = pubkey.to_string();
+            }
+            let file_name = Self::get_filename_by_ip(is_proxy, ip);
 
             let path = self.tinc_home.clone() + "/hosts/" + &file_name;
-            let mut file = fs::File::create(path.clone())
-                .map_err(|e|Error::FileCreateError(e.to_string()))?;
-            file.write(buf.as_bytes())
-                .map_err(|e|Error::IoError(path.clone() + " " + &e.to_string()))?;
-        }
-        Ok(())
-    }
-
-    /// 修改tinc虚拟ip
-    fn change_vip(&self, vip: String) -> Result<()> {
-        let _guard = self.mutex.lock().unwrap();
-        {
-            let buf = "#! /bin/sh\n\
-            dev=tun0\n\
-            vpngw=".to_string() + &vip + "\n\
-            echo 1 > /proc/sys/net/ipv4/ip_forward\n\
-            ifconfig ${dev} ${vpngw} netmask 255.0.0.0\n\
-            exit 0";
-
-            let path = self.tinc_home.clone() + "/tinc-up";
             let mut file = fs::File::create(path.clone())
                 .map_err(|e|Error::FileCreateError(e.to_string()))?;
             file.write(buf.as_bytes())
@@ -457,7 +437,12 @@ impl TincOperator {
     pub fn check_self_hosts_file(&self, tinc_home: &str, tinc_info: &TincInfo) -> Result<()> {
         let _guard = self.mutex.lock().unwrap();
         let ip = tinc_info.ip.to_string();
-        let filename = Self::get_filename_by_ip(&ip);
+
+        let is_proxy = match self.mode {
+            TincRunMode::Proxy => true,
+            TincRunMode::Client => false,
+        };
+        let filename = Self::get_filename_by_ip(is_proxy, &ip);
 
         let path = tinc_home.to_string()
             + "/hosts/"
@@ -480,7 +465,7 @@ impl TincOperator {
             tinc_info.pub_key = res.clone();
         }
         {
-            if let Ok(vip_str) = self.get_vip() {
+            if let Ok(vip_str) = self.get_local_vip() {
                 if let Ok(vip) = IpAddr::from_str(&vip_str) {
                     tinc_info.vip = vip;
                     return Ok(tinc_info);
@@ -491,16 +476,66 @@ impl TincOperator {
         return Err(io::Error::new(io::ErrorKind::InvalidData, "tinc config file error"));
     }
 
-    fn set_tinc_up(&self) -> Result<()> {
+    pub fn set_info_to_local(&mut self, info: &TincInfo) -> Result<()> {
+        self.set_tinc_conf_file(info)?;
+        let is_proxy = match self.mode {
+            TincRunMode::Proxy => true,
+            TincRunMode::Client => false,
+        };
+
+        self.set_tinc_up(&info)?;
+        self.set_tinc_down()?;
+        self.set_host_up()?;
+        self.set_host_down()?;
+
+        for online_proxy in info.connect_to.clone() {
+            self.set_hosts(true,
+                           &online_proxy.ip.to_string(),
+                           &online_proxy.pubkey)?;
+        };
+        self.set_hosts(is_proxy, &info.vip.to_string(), &info.pub_key)
+    }
+
+    fn set_tinc_up(&self, tinc_info: &TincInfo) -> Result<()> {
         let _guard = self.mutex.lock().unwrap();
-        #[cfg(windows)]
-            let buf = &(self.tinc_home.to_string() + "/tinc-report.exe -u");
+
+        let mut buf;
+
+        let netmask = match self.mode {
+            TincRunMode::Proxy => "255.0.0.0",
+            TincRunMode::Client => "255.255.255.255",
+        };
+
         #[cfg(unix)]
-            let buf = "#!/bin/sh\n".to_string() + &self.tinc_home + "/tinc-report -u";
+        {
+            buf = "#! /bin/sh\n\
+            dev=tun0\n\
+            vpngw=".to_string() + &tinc_info.vip.to_string() + "\n" +
+            "ifconfig ${dev} ${vpngw} netmask " + netmask;
+
+            buf = buf + "\n" + &self.tinc_home + "/tinc-report -u";
+
+            if TincRunMode::Client == self.mode {
+                buf = buf + "\n"
+                    + "route add -host " + &tinc_info.connect_to[0].ip.to_string() + " gw _gateway";
+                buf = buf + "\n"
+                    + "route add -host 10.255.255.254 dev tun0";
+                buf = buf + "\n"
+                    + "route add default gw " + &tinc_info.connect_to[0].vip.to_string();
+            }
+        }
+
+        #[cfg(windows)]
+        {
+            buf = "netsh interface ipv4 set address name=\"InsightVPN\" source=static addr=".to_string() +
+                &tinc_info.vip.to_string() + " mask=" + netmask;
+
+            buf = buf + "\n" + &self.tinc_home + "/tinc-report.exe -u";
+        }
 
         let path = self.tinc_home.clone() + "/" + TINC_UP_FILENAME;
         let mut file = fs::File::create(path.clone())
-            .map_err(|e|Error::IoError(path.clone() + " " + &e.to_string()))?;
+            .map_err(|e|Error::FileCreateError(e.to_string()))?;
         file.write(buf.as_bytes())
             .map_err(|e|Error::IoError(path.clone() + " " + &e.to_string()))?;
         Ok(())
@@ -552,7 +587,7 @@ impl TincOperator {
     }
 
     /// 获取子设备公钥
-    fn get_host_pub_key(&self, host_name: &str) -> Result<String> {
+    pub fn get_host_pub_key(&self, host_name: &str) -> Result<String> {
         let _guard = self.mutex.lock().unwrap();
         let file_path = &(self.tinc_home.to_string() + "/hosts/" + host_name);
         let mut file = fs::File::open(file_path)

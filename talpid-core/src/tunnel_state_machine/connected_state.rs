@@ -1,3 +1,8 @@
+#![allow(unused_mut)]
+#![allow(dead_code)]
+#![allow(unused_variables)]
+#![allow(unreachable_patterns)]
+
 use super::{
     AfterDisconnect, BlockedState, ConnectingState, DisconnectingState, EventConsequence,
     SharedTunnelStateValues, TunnelCommand, TunnelState, TunnelStateTransition, TunnelStateWrapper,

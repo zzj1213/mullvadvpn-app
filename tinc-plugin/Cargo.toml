@@ -6,7 +6,7 @@ edition = "2018"
 
 [[bin]]
 path = "./src/main.rs"
-name = "tinc-plugin"
+name = "tinc-report"
 
 [dependencies]
 duct = "0.12"

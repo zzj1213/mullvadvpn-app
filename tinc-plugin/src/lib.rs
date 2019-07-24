@@ -8,9 +8,9 @@ extern crate serde_derive;
 extern crate derive_try_from_primitive;
 
 mod operator;
-pub use operator::TincOperator;
+pub use operator::{TincOperator, Error as TincOperatorError};
 mod info;
-pub use info::{TincInfo, TincRunMode};
+pub use info::{TincInfo, TincRunMode, ConnectTo};
 pub mod tinc_tcp_stream;
 pub mod control;
 pub mod listener;

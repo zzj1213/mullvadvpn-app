@@ -8,20 +8,13 @@ pub enum TincRunMode {
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
-pub struct OnlineProxy {
+pub struct ConnectTo {
     pub ip:                 IpAddr,
     pub vip:                IpAddr,
     pub pubkey:             String,
 }
-impl OnlineProxy {
-    pub fn new() -> Self {
-        Self {
-            ip:     IpAddr::from_str("255.255.255.255").unwrap(),
-            vip:    IpAddr::from_str("255.255.255.255").unwrap(),
-            pubkey: String::new(),
-        }
-    }
-    pub fn from(ip:IpAddr, vip:IpAddr, pubkey:String) -> Self {
+impl ConnectTo {
+    pub fn new(ip:IpAddr, vip:IpAddr, pubkey:String) -> Self {
         Self {
             ip,
             vip,
@@ -36,7 +29,7 @@ pub struct TincInfo {
     pub vip:        IpAddr,
     pub pub_key:    String,
     pub mode:       TincRunMode,
-    pub connect_to: Vec<OnlineProxy>,
+    pub connect_to: Vec<ConnectTo>,
 }
 
 impl TincInfo {

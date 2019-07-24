@@ -1,38 +1,7 @@
-use std::str::FromStr;
-use std::net::IpAddr;
-
 use crate::net::{Endpoint, GenericTunnelOptions, TunnelEndpoint, TunnelType};
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
-pub enum TincRunMode {
-    Client,
-    Proxy,
-}
-
-#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
-pub struct TincInfo {
-    pub ip:         IpAddr,
-    pub vip:        IpAddr,
-    pub pub_key:    String,
-    pub mode:       TincRunMode,
-    pub connect_to: Vec<IpAddr>,
-}
-
-impl TincInfo {
-    pub fn new() -> Self {
-        let ip = IpAddr::from_str("0.0.0.0").unwrap();
-        let vip = IpAddr::from_str("0.0.0.0").unwrap();
-        let pub_key = "".to_string();
-        TincInfo {
-            ip,
-            vip,
-            pub_key,
-            mode: TincRunMode::Client,
-            connect_to: vec![],
-        }
-    }
-}
+pub use tinc_plugin::{TincInfo, ConnectTo};
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize)]
 pub struct TunnelParameters {
@@ -52,10 +21,10 @@ pub struct ConnectionConfig {
 }
 
 impl ConnectionConfig {
-    pub fn new(endpoint: Endpoint) -> ConnectionConfig {
+    pub fn new(endpoint: Endpoint, tinc_info: TincInfo) -> ConnectionConfig {
         Self {
             endpoint,
-            tinc_info: TincInfo::new(),
+            tinc_info,
 //            this_node,
 //            connect_to,
         }

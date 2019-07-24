@@ -1,8 +1,3 @@
-#![allow(unused_mut)]
-#![allow(dead_code)]
-#![allow(unused_variables)]
-#![allow(unreachable_patterns)]
-
 use super::{TunnelEvent, TunnelMetadata};
 use crate::process::tinc::TincOperator;
 use std::{
@@ -13,7 +8,6 @@ use std::{
         Arc,
         atomic::{AtomicBool, Ordering},
     },
-    time::Duration,
 };
 use std::str::FromStr;
 use talpid_types::net::tinc;
@@ -84,22 +78,11 @@ pub enum Error {
     TincOperatorError(#[error(cause)] crate::process::tinc::Error),
 }
 
-
-#[cfg(unix)]
-static TINC_DIE_TIMEOUT: Duration = Duration::from_secs(4);
-#[cfg(windows)]
-static TINC_DIE_TIMEOUT: Duration = Duration::from_secs(30);
-
-#[cfg(unix)]
-const TINC_BIN_FILENAME: &str = "tincd";
-#[cfg(windows)]
-const TINC_BIN_FILENAME: &str = "tincd.exe";
-
 /// Struct for monitoring an Tinc process.
 pub struct TincMonitor {
     tinc:               TincOperator,
     on_event:           Box<dyn Fn(TunnelEvent) + Send + Sync + 'static>,
-    log_path:           Option<PathBuf>,
+    _log_path:           Option<PathBuf>,
     resource_dir:       PathBuf,
     event_rx:           mpsc::Receiver<tinc_plugin::EventType>,
     child:              Arc<duct::Handle>,
@@ -122,13 +105,17 @@ impl TincMonitor {
 
         let mut tinc_operator = TincOperator::new(resource_dir_str.to_string() + "/tinc/");
 
+        println!("{:?}", &params.config.tinc_info);
+
+        tinc_operator.set_info_to_local(&params.config.tinc_info).map_err(Error::TincOperatorError)?;
+
         let child = tinc_operator.start_tinc().map_err(|_|Error::StartTincError)?;
 
         let event_rx = tinc_plugin::spawn();
 
         let pinger_event = on_event.clone();
         {
-            let vip_str = tinc_operator.get_vip().map_err(Error::TincOperatorError)?;
+            let vip_str = tinc_operator.get_local_vip().map_err(Error::TincOperatorError)?;
             let vip = Ipv4Addr::from_str(&vip_str).unwrap();
             let ips = vec![IpAddr::from(vip.clone())];
 
@@ -156,7 +143,7 @@ impl TincMonitor {
         return Ok(TincMonitor {
             tinc: tinc_operator,
             on_event,
-            log_path: log_file,
+            _log_path: log_file,
             resource_dir: resource_dir.to_owned(),
             event_rx,
             child: Arc::new(child),
@@ -165,7 +152,7 @@ impl TincMonitor {
     }
 
     fn tunnel_up(&self) -> Result<()> {
-        let vip_str = self.tinc.get_vip().map_err(Error::TincOperatorError)?;
+        let vip_str = self.tinc.get_local_vip().map_err(Error::TincOperatorError)?;
         let vip = Ipv4Addr::from_str(&vip_str).unwrap();
         let ips = vec![IpAddr::from(vip.clone())];
 
@@ -181,7 +168,7 @@ impl TincMonitor {
     }
 
     /// Consumes the monitor and waits for both proxy and tunnel, as applicable.
-    pub fn wait(mut self) -> Result<()> {
+    pub fn wait(self) -> Result<()> {
         let wait_result = match self.event_rx.recv() {
             Ok(tinc_plugin::EventType::Up) => {
                 self.tunnel_up()?;

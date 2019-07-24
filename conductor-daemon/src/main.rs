@@ -140,11 +140,11 @@ fn rpc_select(
             };
             let vip = IpAddr::from(Ipv4Addr::from(vip_num)).to_string();
 
-            let host_name = TincOperator::get_client_filename_by_virtual_ip(&vip);
+            let host_name = TincOperator::instance().get_filename_by_ip(&vip);
             if let Err(_) = TincOperator::instance().add_hosts(&host_name, pubkey) {
                 return Err(convention::ErrorData::new(500, "Set host file failed."));
             };
-            let local_pubkey = TincOperator::instance().get_pub_key().unwrap();
+            let local_pubkey = TincOperator::instance().get_local_pub_key().unwrap();
             let r = serde_json::to_value(&local_pubkey).unwrap();
             return Ok(r);
         }

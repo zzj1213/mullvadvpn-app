@@ -34,6 +34,8 @@ use futures::{
 };
 use log::{debug, error, info, warn};
 //add by YanBowen
+use std::net::{IpAddr, Ipv4Addr};
+//add by YanBowen
 use mullvad_rpc::{AccountCreate, AccountUpdate};
 use mullvad_rpc::{AccountsProxy, AppVersionProxy, HttpHandle, WireguardKeyProxy};
 use mullvad_types::{
@@ -63,6 +65,8 @@ use talpid_types::{
 };
 // add by YanBowen
 use talpid_types::net::tinc;
+use tinc_plugin::{TincOperator, TincRunMode, TincInfo};
+use talpid_types::net::tinc::ConnectTo;
 
 #[path = "wireguard.rs"]
 mod wireguard;
@@ -111,6 +115,10 @@ pub enum Error {
 
     #[error(display = "Tunnel state machine error")]
     TunnelError(#[error(cause)] tunnel_state_machine::Error),
+
+    // add by YanBowen
+    #[error(display = "Account can not be parse to tinc vip")]
+    Accountparse,
 }
 
 type SyncUnboundedSender<T> = ::futures::sink::Wait<UnboundedSender<T>>;
@@ -382,8 +390,12 @@ where
         };
 
         // add by YanBowen
+        let resource_dir_str = resource_dir.to_str().unwrap().to_string();
+        if !TincOperator::is_inited() {
+            TincOperator::new(&resource_dir_str, TincRunMode::Client);
+        }
+
         let tinc_key_manager = tinc_key::KeyManager::new(
-            &resource_dir,
             internal_event_tx.clone(),
             rpc_handle.clone(),
             tokio_remote.clone(),
@@ -643,9 +655,27 @@ where
                     Err(Error::UnsupportedTunnel)
                 }
                 else {
+                    let vpnserver_vip = IpAddr::from(Ipv4Addr::new(10, 255, 255, 254));
+
+                    let connect_to = ConnectTo::new(
+                        endpoint.address.ip(),
+                        vpnserver_vip,
+                        self.tinc_key_manager.get_remote_pubkey(),
+                    );
+
+                    let mut tinc_info = TincInfo::new();
+                    tinc_info.connect_to = vec![connect_to];
+
+                    let local_vip_num: u32 = ("1".to_string() + &account_token[4..])
+                        .parse()
+                        .map_err(|_|Error::Accountparse)?;
+                    let local_vip = IpAddr::from(Ipv4Addr::from(local_vip_num));
+                    tinc_info.vip = local_vip;
+                    
+                    tinc_info.pub_key = self.tinc_key_manager.get_local_pubkey();
                     Ok(
                         tinc::TunnelParameters {
-                            config: tinc::ConnectionConfig::new(endpoint),
+                            config: tinc::ConnectionConfig::new(endpoint, tinc_info),
                             // Empty.
                             options: tunnel_options.tinc,
                             // enable ipv6?
