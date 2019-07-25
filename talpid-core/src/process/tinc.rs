@@ -5,7 +5,6 @@
 
 use std::fs;
 use std::io::{self, Read};
-#[cfg(unix)]
 use std::net::IpAddr;
 use std::str::FromStr;
 

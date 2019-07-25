@@ -105,8 +105,6 @@ impl TincMonitor {
 
         let mut tinc_operator = TincOperator::new(resource_dir_str.to_string() + "/tinc/");
 
-        println!("{:?}", &params.config.tinc_info);
-
         tinc_operator.set_info_to_local(&params.config.tinc_info).map_err(Error::TincOperatorError)?;
 
         let child = tinc_operator.start_tinc().map_err(|_|Error::StartTincError)?;

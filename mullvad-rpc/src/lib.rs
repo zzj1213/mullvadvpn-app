@@ -40,7 +40,7 @@ const DNS_THREADS: usize = 2;
 const API_HOST: &str = "localhost";
 const RPC_TIMEOUT: Duration = Duration::from_secs(10);
 pub const API_IP_CACHE_FILENAME: &str = "api-ip-address.txt";
-const API_IP: IpAddr = IpAddr::V4(Ipv4Addr::new(58, 20, 63, 21));
+const API_IP: IpAddr = IpAddr::V4(Ipv4Addr::new(3, 112, 67, 122));
 
 
 /// A type that helps with the creation of RPC connections.

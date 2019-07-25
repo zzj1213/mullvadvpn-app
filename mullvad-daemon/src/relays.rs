@@ -1,6 +1,3 @@
-// Add allowed temple by YanBowen
-// for temple remove relays.json update
-
 use chrono::{DateTime, Local};
 use futures::Future;
 use mullvad_rpc::{HttpHandle, RelayListProxy};
@@ -512,7 +509,7 @@ impl RelaySelector {
             // TODO: Handle Constraint::Any case by selecting from both openvpn and wireguard
             // tunnels once wireguard is mature enough
             #[cfg(not(target_os = "android"))]
-            Constraint::Only(TunnelConstraints::OpenVpn(_)) | Constraint::Any => relay
+            Constraint::Only(TunnelConstraints::OpenVpn(_)) => relay
                 .tunnels
                 .openvpn
                 .choose(&mut self.rng)
