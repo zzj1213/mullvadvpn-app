@@ -21,6 +21,7 @@ mod rpc_uniqueness_check;
 mod settings;
 pub mod version;
 // add by YanBowen
+use std::convert::TryFrom;
 mod tinc_key;
 
 pub use crate::management_interface::ManagementCommand;
@@ -669,7 +670,10 @@ where
                     let local_vip_num: u32 = ("1".to_string() + &account_token[4..])
                         .parse()
                         .map_err(|_|Error::Accountparse)?;
-                    let local_vip = IpAddr::from(Ipv4Addr::from(local_vip_num));
+                    let local_vip = IpAddr::try_from(
+                        Ipv4Addr::try_from(local_vip_num)
+                            .map_err(|_|Error::Accountparse)?
+                    ).map_err(|_|Error::Accountparse)?;
                     tinc_info.vip = local_vip;
                     
                     tinc_info.pub_key = self.tinc_key_manager.get_local_pubkey();

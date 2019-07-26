@@ -7,7 +7,7 @@ use std::ffi::OsString;
 use std::fs;
 use std::io::{self, Write, Read};
 use std::sync::Mutex;
-use std::net::IpAddr;
+use std::net::{IpAddr, Ipv4Addr};
 use std::str::FromStr;
 
 use duct;
@@ -108,6 +108,11 @@ pub enum Error {
     /// No wan dev
     #[error(display = "No wan dev")]
     NoWanDev,
+
+
+    /// Address loaded from file is invalid
+    #[error(display = "Address loaded from file is invalid")]
+    ParseLocalVipError(#[error(cause)] std::net::AddrParseError),
 }
 
 /// Tinc operator
@@ -290,7 +295,7 @@ impl TincOperator {
     }
 
     /// 获取本地tinc虚拟ip
-    pub fn get_local_vip(&self) -> Result<String> {
+    pub fn get_local_vip(&self) -> Result<IpAddr> {
         let _guard = self.mutex.lock().unwrap();
         let mut out = String::new();
 
@@ -304,18 +309,18 @@ impl TincOperator {
         #[cfg(unix)]
             let res: Vec<&str> = res.split("vpngw=").collect();
         #[cfg(windows)]
-            let res: Vec<&str> = res.split("addr=\"").collect();
+            let res: Vec<&str> = res.split("addr=").collect();
         if res.len() > 1 {
             let res = res[1].to_string();
             #[cfg(unix)]
-                let res: Vec<&str> = res.split("\n").collect();
+            let res: Vec<&str> = res.split("\n").collect();
             #[cfg(windows)]
-                let res: Vec<&str> = res.split("\" ").collect();
+            let res: Vec<&str> = res.split(" mask").collect();
             if res.len() > 1 {
                 out = res[0].to_string();
             }
         }
-        return Ok(out);
+        Ok(IpAddr::from(Ipv4Addr::from_str(&out).map_err(Error::ParseLocalVipError)?))
     }
 
     /// 通过Info修改tinc.conf
@@ -343,15 +348,18 @@ impl TincOperator {
             let buf = "ConnectTo = ".to_string() + &other + "\n";
             buf_connect_to += &buf;
         }
-        let buf :String = "Name = ".to_string() + &name + "\n"
+        let mut buf :String = "Name = ".to_string() + &name + "\n"
         + &buf_connect_to
         + "DeviceType=tap\n\
             Mode=switch\n\
-            Interface=tun0\n\
-            Device = /dev/net/tun\n\
+            Interface=dnet\n\
             BindToAddress = * 50069\n\
             ProcessPriority = high\n\
             PingTimeout=10";
+        #[cfg(unix)]
+        {
+             buf = buf + "Device = /dev/net/tun\n";
+        }
 
         let path = self.tinc_home.clone() + "/tinc.conf";
         let mut file = fs::File::create(path.clone())
@@ -363,44 +371,44 @@ impl TincOperator {
 
     /// 检查info中的配置, 并与实际运行的tinc配置对比, 如果不同修改tinc配置,
     /// 如果自己的vip修改,重启tinc
-    pub fn check_info(&mut self, tinc_info: &TincInfo) -> Result<()> {
-        let mut need_restart = false;
-        {
-            let file_vip = self.get_local_vip()?;
-            if file_vip != tinc_info.vip.to_string() {
-                log::debug!("tinc operator check_info local {}, remote {}",
-                       file_vip,
-                       tinc_info.vip.to_string());
-
-                self.set_tinc_up(&tinc_info)?;
-
-                self.set_hosts(true,
-                                   &tinc_info.ip.to_string(),
-                                   &tinc_info.pub_key)?;
-
-                need_restart = true;
-            }
-        }
-        {
-            for online_proxy in tinc_info.connect_to.clone() {
-                self.set_hosts(true,
-                                   &online_proxy.ip.to_string(),
-                                   &online_proxy.pubkey)?;
-            }
-        }
-
-        self.check_self_hosts_file(&self.tinc_home, &tinc_info)?;
-        self.set_hosts(
-            true,
-            &tinc_info.ip.to_string(),
-            &tinc_info.pub_key)?;
-
-        if need_restart {
-            self.set_tinc_conf_file(&tinc_info)?;
-            self.stop_tinc()?;
-        }
-        return Ok(());
-    }
+//    pub fn check_info(&mut self, tinc_info: &TincInfo) -> Result<()> {
+//        let mut need_restart = false;
+//        {
+//            let file_vip = self.get_local_vip()?;
+//            if file_vip != tinc_info.vip {
+//                log::debug!("tinc operator check_info local {}, remote {}",
+//                       file_vip,
+//                       tinc_info.vip.to_string());
+//
+//                self.set_tinc_up(&tinc_info)?;
+//
+//                self.set_hosts(true,
+//                                   &tinc_info.ip.to_string(),
+//                                   &tinc_info.pub_key)?;
+//
+//                need_restart = true;
+//            }
+//        }
+//        {
+//            for online_proxy in tinc_info.connect_to.clone() {
+//                self.set_hosts(true,
+//                                   &online_proxy.ip.to_string(),
+//                                   &online_proxy.pubkey)?;
+//            }
+//        }
+//
+//        self.check_self_hosts_file(&self.tinc_home, &tinc_info)?;
+//        self.set_hosts(
+//            true,
+//            &tinc_info.ip.to_string(),
+//            &tinc_info.pub_key)?;
+//
+//        if need_restart {
+//            self.set_tinc_conf_file(&tinc_info)?;
+//            self.stop_tinc()?;
+//        }
+//        return Ok(());
+//    }
 
     /// 添加hosts文件
     /// if is_proxy{ 文件名=proxy_10_253_x_x }
@@ -455,26 +463,21 @@ impl TincOperator {
 
     /// Load local tinc config file vpnserver for tinc vip and pub_key.
     /// Success return true.
-    pub fn load_local(&mut self, tinc_home: &str) -> io::Result<TincInfo> {
-        let _guard = self.mutex.lock().unwrap();
-        let mut tinc_info = TincInfo::new();
-        {
-            let mut res = String::new();
-            let mut _file = fs::File::open(tinc_home.to_string() + PUB_KEY_FILENAME)?;
-            _file.read_to_string(&mut res)?;
-            tinc_info.pub_key = res.clone();
-        }
-        {
-            if let Ok(vip_str) = self.get_local_vip() {
-                if let Ok(vip) = IpAddr::from_str(&vip_str) {
-                    tinc_info.vip = vip;
-                    return Ok(tinc_info);
-                }
-
-            }
-        }
-        return Err(io::Error::new(io::ErrorKind::InvalidData, "tinc config file error"));
-    }
+//    pub fn load_local(&mut self, tinc_home: &str) -> io::Result<TincInfo> {
+//        let _guard = self.mutex.lock().unwrap();
+//        let mut tinc_info = TincInfo::new();
+//        {
+//            let mut res = String::new();
+//            let mut _file = fs::File::open(tinc_home.to_string() + PUB_KEY_FILENAME)?;
+//            _file.read_to_string(&mut res).map_err(Error::IoError)?;
+//            tinc_info.pub_key = res.clone();
+//        }
+//        {
+//            tinc_info.vip = self.get_local_vip()?
+//
+//        }
+//        return Err(Error::L);
+//    }
 
     pub fn set_info_to_local(&mut self, info: &TincInfo) -> Result<()> {
         self.set_tinc_conf_file(info)?;
@@ -509,7 +512,7 @@ impl TincOperator {
         #[cfg(unix)]
         {
             buf = "#! /bin/sh\n\
-            dev=tun0\n\
+            dev=dnet\n\
             vpngw=".to_string() + &tinc_info.vip.to_string() + "\n" +
             "ifconfig ${dev} ${vpngw} netmask " + netmask;
 
@@ -519,7 +522,7 @@ impl TincOperator {
                 buf = buf + "\n"
                     + "route add -host " + &tinc_info.connect_to[0].ip.to_string() + " gw _gateway";
                 buf = buf + "\n"
-                    + "route add -host 10.255.255.254 dev tun0";
+                    + "route add -host 10.255.255.254 dev dnet";
                 buf = buf + "\n"
                     + "route add default gw " + &tinc_info.connect_to[0].vip.to_string();
             }
@@ -527,10 +530,10 @@ impl TincOperator {
 
         #[cfg(windows)]
         {
-            buf = "netsh interface ipv4 set address name=\"InsightVPN\" source=static addr=".to_string() +
+            buf = "netsh interface ipv4 set address name=\"dnet\" source=static addr=".to_string() +
                 &tinc_info.vip.to_string() + " mask=" + netmask;
 
-            buf = buf + "\n" + &self.tinc_home + "/tinc-report.exe -u";
+            buf = buf + "\r\n" + &self.tinc_home + "/tinc-report.exe -u";
         }
 
         let path = self.tinc_home.clone() + "/" + TINC_UP_FILENAME;
@@ -626,4 +629,20 @@ impl TincOperator {
 //        return Ok(());
 //    }
 
+}
+
+#[cfg(windows)]
+fn get_vnic_index() -> Option<String> {
+    let res = duct::cmd!(
+    "wmic",
+    "nic",
+    "where",
+    "netconnectionid = 'dnet'",
+    "get",
+    "index");
+    if let Ok(mut out) = res.read() {
+        out = out.replace("Index  \r\r\n", "").replace(" ", "");
+        return Some(out);
+    }
+    None
 }

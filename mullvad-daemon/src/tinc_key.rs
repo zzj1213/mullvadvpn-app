@@ -7,7 +7,7 @@ use jsonrpc_client_core::Error as JsonRpcError;
 use tokio_core::reactor::Remote;
 
 use mullvad_types::account::AccountToken;
-use tinc_plugin::{TincOperator, TincRunMode};
+use tinc_plugin::TincOperator;
 
 #[derive(err_derive::Error, Debug)]
 pub enum Error {

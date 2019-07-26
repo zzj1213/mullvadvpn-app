@@ -9,7 +9,6 @@ use std::{
         atomic::{AtomicBool, Ordering},
     },
 };
-use std::str::FromStr;
 use talpid_types::net::tinc;
 
 use std::net::{TcpStream, SocketAddr};
@@ -19,7 +18,7 @@ use tinc_plugin;
 
 #[cfg(target_os = "linux")]
 use which;
-use std::net::{IpAddr, Ipv4Addr};
+use std::net::IpAddr;
 
 mod ping_monitor;
 
@@ -113,15 +112,18 @@ impl TincMonitor {
 
         let pinger_event = on_event.clone();
         {
-            let vip_str = tinc_operator.get_local_vip().map_err(Error::TincOperatorError)?;
-            let vip = Ipv4Addr::from_str(&vip_str).unwrap();
-            let ips = vec![IpAddr::from(vip.clone())];
+            let vip = tinc_operator.get_local_vip().map_err(Error::TincOperatorError)?;
+            let vip_ipv4 = match vip {
+                IpAddr::V4(x) => x,
+                IpAddr::V6(_) => return Err(Error::StartTincError),
+            };
+            let ips = vec![vip.clone()];
 
-            let interface_name = "tun0";
+            let interface_name = "dnet";
             let metadata = TunnelMetadata {
                 interface: interface_name.to_string(),
                 ips,
-                ipv4_gateway: vip,
+                ipv4_gateway: vip_ipv4,
                 ipv6_gateway: None
             };
 
@@ -150,15 +152,21 @@ impl TincMonitor {
     }
 
     fn tunnel_up(&self) -> Result<()> {
-        let vip_str = self.tinc.get_local_vip().map_err(Error::TincOperatorError)?;
-        let vip = Ipv4Addr::from_str(&vip_str).unwrap();
-        let ips = vec![IpAddr::from(vip.clone())];
+        let vip = self.tinc.get_local_vip().map_err(Error::TincOperatorError)?;
+        let ips = vec![
+            vip.clone(),
+        ];
 
-        let interface_name = "tun0";
+        let vip_ipv4 = match vip {
+            IpAddr::V4(x) => x,
+            IpAddr::V6(_) => return Err(Error::StartTincError),
+        };
+
+        let interface_name = "dnet";
         let metadata = TunnelMetadata {
             interface: interface_name.to_string(),
             ips,
-            ipv4_gateway: vip,
+            ipv4_gateway: vip_ipv4,
             ipv6_gateway: None
         };
         (self.on_event)(TunnelEvent::Up(metadata));

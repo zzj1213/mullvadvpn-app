@@ -280,7 +280,8 @@ impl TunnelMonitor {
             L: Fn(TunnelEvent) + Send + Sync + Clone + 'static,
     {
         let monitor =
-            tinc::TincMonitor::start(on_event, config, log, resource_dir)?;
+            tinc::TincMonitor::start(on_event, config, log, resource_dir)
+                .map_err(|e|{log::error!("{:?}", e);e})?;
         Ok(TunnelMonitor {
             monitor: InternalTunnelMonitor::Tinc(monitor),
         })

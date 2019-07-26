@@ -3,10 +3,7 @@
 #![allow(unused_variables)]
 #![allow(unreachable_patterns)]
 
-use std::fs;
-use std::io::{self, Read};
 use std::net::IpAddr;
-use std::str::FromStr;
 
 use tinc_plugin::TincInfo;
 use tinc_plugin::{TincOperator as PluginTincOperator, TincOperatorError};
@@ -93,7 +90,7 @@ impl TincOperator {
     }
 
     /// 获取本地tinc虚拟ip
-    pub fn get_local_vip(&self) -> Result<String> {
+    pub fn get_local_vip(&self) -> Result<IpAddr> {
         PluginTincOperator::instance().get_local_vip()
     }
 
@@ -110,32 +107,5 @@ impl TincOperator {
     /// set_tinc_conf_file
     pub fn set_info_to_local(&self, tinc_info: &TincInfo) -> Result<()> {
         PluginTincOperator::instance().set_info_to_local(tinc_info)
-    }
-
-    /// Load local tinc config file vpnserver for tinc vip and pub_key.
-    /// Success return true.
-    pub fn load_local(&mut self, tinc_home: &str) -> io::Result<TincInfo> {
-        let mut tinc_info = TincInfo::new();
-        {
-            let mut res = String::new();
-            let mut _file = fs::File::open(tinc_home.to_string() + PUB_KEY_FILENAME)?;
-            _file.read_to_string(&mut res)?;
-            tinc_info.pub_key = res.clone();
-        }
-        {
-            if let Ok(vip_str) = self.get_local_vip() {
-                if let Ok(vip) = IpAddr::from_str(&vip_str) {
-                    tinc_info.vip = vip;
-                    return Ok(tinc_info);
-                }
-
-            }
-        }
-        return Err(io::Error::new(io::ErrorKind::InvalidData, "tinc config file error"));
-    }
-
-    /// check info and save change
-    pub fn check_info(&self, tinc_info: &TincInfo) -> Result<()> {
-        PluginTincOperator::instance().check_info(tinc_info)
     }
 }
