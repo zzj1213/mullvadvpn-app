@@ -119,9 +119,9 @@ impl TincMonitor {
             };
             let ips = vec![vip.clone()];
 
-            let mut interface_name = String::new();
+            let interface_name;
 
-            #[cfg(not(macos))]
+            #[cfg(not(target_os = "macos"))]
             {
                 interface_name = "dnet".to_string();
             }

@@ -1,0 +1,39 @@
+{
+  "account_token": "579777324915",
+  "relay_settings": {
+    "normal": {
+      "location": "any",
+      "tunnel": {
+        "only": {
+          "tinc": {
+            "port": "any",
+            "protocol": {
+              "only": "udp"
+            }
+          }
+        }
+      }
+    }
+  },
+  "bridge_settings": {
+    "normal": {
+      "location": "any"
+    }
+  },
+  "bridge_state": "auto",
+  "allow_lan": false,
+  "block_when_disconnected": false,
+  "auto_connect": false,
+  "tunnel_options": {
+    "openvpn": {
+      "mssfix": null
+    },
+    "tinc": {},
+    "wireguard": {
+      "mtu": null
+    },
+    "generic": {
+      "enable_ipv6": false
+    }
+  }
+}

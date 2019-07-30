@@ -116,11 +116,15 @@ pub enum Error {
 
     ///
     #[error(display = "Get default gateway error")]
-    GetDefaultGatewayError,
+    GetDefaultGatewayError(String),
 
     ///
     #[error(display = "Permissions error")]
     PermissionsError(#[error(cause)] std::io::Error),
+
+    ///
+    #[error(display = "Permissions error")]
+    VnicNotFind(String),
 }
 
 /// Tinc operator
@@ -236,11 +240,11 @@ impl TincOperator {
     /// 添加子设备
     pub fn add_hosts(&self, host_name: &str, pub_key: &str) -> Result<()> {
         let _guard = self.mutex.lock().unwrap();
-        let mut file = fs::File::create(
-            format!("{}/{}/{}", self.tinc_home.clone() , "hosts", host_name))
-            .map_err(|e|Error::FileCreateError(e.to_string()))?;
+        let path = format!("{}/{}/{}", self.tinc_home.clone() , "hosts", host_name);
+        let mut file = fs::File::create(&path)
+            .map_err(|e|Error::FileCreateError(path.clone() + " " + &e.to_string()))?;
         file.write_all(pub_key.as_bytes())
-            .map_err(|e|Error::FileCreateError(e.to_string()))?;
+            .map_err(|e|Error::FileCreateError(path.clone() + " " + &e.to_string()))?;
         drop(file);
         Ok(())
     }
@@ -254,7 +258,9 @@ impl TincOperator {
                 if let Ok(priv_key) = String::from_utf8(priv_key) {
                     let mut file = fs::File::create(
                         self.tinc_home.to_string() + PRIV_KEY_FILENAME)
-                        .map_err(|e|Error::FileCreateError(e.to_string()))?;
+                        .map_err(|e|
+                            Error::FileCreateError((self.tinc_home.to_string() + PRIV_KEY_FILENAME)
+                                + " " + &e.to_string()))?;
                     file.write_all(priv_key.as_bytes())
                         .map_err(|_|Error::CreatePubKeyError)?;
                     drop(file);
@@ -264,9 +270,9 @@ impl TincOperator {
             }
             if let Ok(pub_key) = key.public_key_to_pem() {
                 if let Ok(pub_key) = String::from_utf8(pub_key) {
-                    let mut file = fs::File::create(
-                        self.tinc_home.to_string() + PUB_KEY_FILENAME)
-                        .map_err(|e|Error::FileCreateError(e.to_string()))?;
+                    let path = self.tinc_home.to_string() + PUB_KEY_FILENAME;
+                    let mut file = fs::File::create(&path)
+                        .map_err(|e|Error::FileCreateError(path.clone() + " " + &e.to_string()))?;
                     file.write_all(pub_key.as_bytes())
                         .map_err(|_|Error::CreatePubKeyError)?;
                     drop(file);
@@ -357,7 +363,7 @@ impl TincOperator {
             buf_connect_to += &buf;
         }
 
-        let mut buf= String::new();
+        let buf;
         #[cfg(target_os = "linux")]
         {
             buf = "Name = ".to_string() + &name + "\n"
@@ -396,7 +402,7 @@ impl TincOperator {
 
         let path = self.tinc_home.clone() + "/tinc.conf";
         let mut file = fs::File::create(path.clone())
-            .map_err(|e|Error::FileCreateError(e.to_string()))?;
+            .map_err(|e|Error::FileCreateError(path.clone() + " " + &e.to_string()))?;
         file.write(buf.as_bytes())
             .map_err(|e|Error::IoError(path.clone() + " " + &e.to_string()))?;
         return Ok(());
@@ -467,7 +473,7 @@ impl TincOperator {
 
             let path = self.tinc_home.clone() + "/hosts/" + &file_name;
             let mut file = fs::File::create(path.clone())
-                .map_err(|e|Error::FileCreateError(e.to_string()))?;
+                .map_err(|e|Error::FileCreateError(path.clone() + " " + &e.to_string()))?;
             file.write(buf.as_bytes())
                 .map_err(|e|Error::IoError(path.clone() + " " + &e.to_string()))?;
         }
@@ -513,6 +519,8 @@ impl TincOperator {
 //    }
 
     pub fn set_info_to_local(&mut self, info: &TincInfo) -> Result<()> {
+        self.create_tinc_dirs()?;
+
         self.set_tinc_conf_file(info)?;
         let is_proxy = match self.mode {
             TincRunMode::Proxy => true,
@@ -540,7 +548,7 @@ impl TincOperator {
             TincRunMode::Client => "255.255.255.255",
         };
 
-        let mut buf = String::new();
+        let mut buf;
 
         #[cfg(target_os = "linux")]
         {
@@ -548,8 +556,6 @@ impl TincOperator {
             dev=dnet\n\
             vpngw=".to_string() + &tinc_info.vip.to_string() + "\n" +
             "ifconfig ${dev} ${vpngw} netmask " + netmask;
-
-            buf = buf + "\n" + &self.tinc_home + "/tinc-report -u";
 
             if TincRunMode::Client == self.mode {
                 buf = buf + "\n"
@@ -559,6 +565,8 @@ impl TincOperator {
                 buf = buf + "\n"
                     + "route add default gw " + &tinc_info.connect_to[0].vip.to_string();
             }
+
+            buf = buf + "\n" + &self.tinc_home + "/tinc-report -u";
         }
         #[cfg(target_os = "macos")]
         {
@@ -566,8 +574,7 @@ impl TincOperator {
                    dev=tap0\n\
                    vpngw=".to_string()
                    + &tinc_info.vip.to_string() + "\n"
-                   + "ifconfig ${dev} ${vpngw} netmask  " + netmask + "\n"
-                   + &self.tinc_home + "/tinc-report -u\n";
+                   + "ifconfig ${dev} ${vpngw} netmask  " + netmask + "\n";
 
             if TincRunMode::Client == self.mode {
                 let default_gateway = get_default_gateway()?.to_string();
@@ -578,18 +585,33 @@ impl TincOperator {
                     + "route add -host 10.255.255.254 -interface tap0 -iface -cloning\n"
                     + "route add -net 0.0.0.0 -gateway 10.255.255.254";
             }
+
+            buf = buf + &self.tinc_home + "/tinc-report -u\n";
         }
         #[cfg(windows)]
         {
             buf = "netsh interface ipv4 set address name=\"dnet\" source=static addr=".to_string() +
-                &tinc_info.vip.to_string() + " mask=" + netmask;
+                &tinc_info.vip.to_string() + " mask=" + netmask + "\r\n";
 
-            buf = buf + "\r\n" + &self.tinc_home + "/tinc-report.exe -u";
+            if TincRunMode::Client == self.mode {
+                let default_gateway = get_default_gateway()?.to_string();
+                let vnic_index = format!("{}", get_vnic_index()?);
+
+                buf = buf
+                    + "route add " + &tinc_info.connect_to[0].ip.to_string()
+                        + " mask 255.255.255.255 " + &default_gateway + "\r\n"
+                    + "route add 10.255.255.254 mask 255.255.255.255 10.255.255.254 if "
+                        + &vnic_index + "\r\n"
+                    + "route add 0.0.0.0 mask 0.0.0.0 10.255.255.254 if "
+                        + &vnic_index + "\r\n";
+            }
+
+            buf = buf + &self.tinc_home + "/tinc-report.exe -u";
         }
 
         let path = self.tinc_home.clone() + "/" + TINC_UP_FILENAME;
         let mut file = fs::File::create(path.clone())
-            .map_err(|e|Error::FileCreateError(e.to_string()))?;
+            .map_err(|e|Error::FileCreateError(path.clone() + " " + &e.to_string()))?;
         file.write(buf.as_bytes())
             .map_err(|e|Error::IoError(path.clone() + " " + &e.to_string()))?;
         #[cfg(unix)]
@@ -599,7 +621,7 @@ impl TincOperator {
 
     fn set_tinc_down(&self, tinc_info: &TincInfo) -> Result<()> {
         let _guard = self.mutex.lock().unwrap();
-        let mut buf = String::new();
+        let buf;
         #[cfg(target_os = "linux")]
         {
             buf = "#!/bin/bash\n".to_string() + &self.tinc_home + "/tinc-report -d";
@@ -614,7 +636,10 @@ impl TincOperator {
         }
         #[cfg(windows)]
         {
-            buf = self.tinc_home.to_string() + "/tinc-report.exe -d";
+            let vnic_index = format!("{}", get_vnic_index()?);
+            buf = "route delete 0.0.0.0 mask 0.0.0.0 10.255.255.254 if ".to_string()
+                + &vnic_index + "\r\n"
+                + &self.tinc_home.to_string() + "/tinc-report.exe -d";
         }
 
         let path = self.tinc_home.clone() + "/" + TINC_DOWN_FILENAME;
@@ -658,6 +683,15 @@ impl TincOperator {
             .map_err(|e|Error::IoError(path.clone() + " " + &e.to_string()))?;
         #[cfg(unix)]
             set_script_permissions(&path)?;
+        Ok(())
+    }
+
+    fn create_tinc_dirs(&self) -> Result<()> {
+        let path_str = self.tinc_home.clone() + "/hosts";
+        if !std::path::Path::new(&path_str).is_dir() {
+            fs::create_dir_all(&path_str)
+                .map_err(|_| Error::IoError("Can't create tinc home dir".to_string()))?;
+        }
         Ok(())
     }
 
@@ -712,19 +746,14 @@ fn set_script_permissions(path: &str) -> Result<()>{
 }
 
 #[cfg(windows)]
-fn get_vnic_index() -> Option<String> {
-    let res = duct::cmd!(
-    "wmic",
-    "nic",
-    "where",
-    "netconnectionid = 'dnet'",
-    "get",
-    "index");
-    if let Ok(mut out) = res.read() {
-        out = out.replace("Index  \r\r\n", "").replace(" ", "");
-        return Some(out);
+fn get_vnic_index() -> Result<u32> {
+    let adapters = ipconfig::get_adapters().unwrap();
+    for interface in adapters {
+        if interface.friendly_name() == "dnet" {
+            return Ok(interface.ipv6_if_index());
+        }
     }
-    None
+    Err(Error::VnicNotFind("No Adapter name \"dnet\" find".to_string()))
 }
 
 #[cfg(target_os = "macos")]
@@ -732,12 +761,52 @@ fn get_default_gateway() -> Result<IpAddr> {
     let cmd = duct::cmd!(
         "route", "-n", "get", "default"
     );
-    let res = cmd.read().map_err(|_|Error::GetDefaultGatewayError)?;
+    let res = cmd.read().map_err(|e|Error::GetDefaultGatewayError(e.to_string()))?;
     let res: Vec<&str> = res.split("gateway: ").collect();
     if res.len() < 1 {
-        return Err(Error::GetDefaultGatewayError);
+        return Err(Error::GetDefaultGatewayError("route -n get default not find gateway:".to_string()));
     }
     let res: Vec<&str> = res[1].split("\n").collect();
     let res = res[0];
-    IpAddr::from_str(res).map_err(|_|Error::GetDefaultGatewayError)
+    IpAddr::from_str(res).map_err(|e|Error::GetDefaultGatewayError(e.to_string()))
+}
+
+#[cfg(target_os = "windows")]
+fn get_default_gateway() -> Result<IpAddr> {
+    let cmd = ::std::process::Command::new("route")
+        .args(vec![
+            "print",
+        ])
+        .output()
+        .expect("sh command failed to start");
+
+    let stdout = cmd.stdout;
+
+    let mut res = vec![];
+    for i in stdout {
+        if i < 32 || 126 < i {
+            continue
+        }
+        else {
+            res.push(i);
+        }
+    }
+
+    let mut res = String::from_utf8(res)
+        .map_err(|e|Error::GetDefaultGatewayError(e.to_string()))?;
+    for i in 0..5 {
+        res = res.replace("    ", " ").replace("  ", " ");
+    }
+
+    let res: Vec<&str> = res.split("0.0.0.0").collect();
+    if res.len() < 2 {
+        return Err(Error::GetDefaultGatewayError("route print not find 0.0.0.0 route.".to_string()));
+    }
+
+    let res: Vec<&str> = res[2].split(" ").collect();
+    let default_gateway_str = res[2];
+    let default_gateway = IpAddr::from_str(default_gateway_str)
+        .map_err(|e| Error::GetDefaultGatewayError(e.to_string()
+            + "\n" + "route print not find 0.0.0.0 route"))?;
+    return Ok(default_gateway);
 }

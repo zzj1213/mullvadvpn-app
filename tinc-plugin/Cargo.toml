@@ -11,6 +11,7 @@ name = "tinc-report"
 [dependencies]
 duct = "0.12"
 err-derive = "0.1.5"
+ipconfig = "0.2.1"
 log = "0.4"
 tokio = "0.1"
 futures = "0.1"
