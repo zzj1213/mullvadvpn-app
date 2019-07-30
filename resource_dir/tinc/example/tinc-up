@@ -1,0 +1,9 @@
+#! /bin/bash
+dev=tap0
+vpngw=10.67.151.175
+ifconfig ${dev} ${vpngw} netmask  255.255.255.255
+/Users/bowen/Rust/7_26/mullvadvpn-app/resource_dir/tinc//tinc-report -u
+route -q -n delete -net 0.0.0.0
+route -q -n add -host 3.112.67.122 -gateway 192.168.1.1
+route add -host 10.255.255.254 -interface tap0 -iface -cloning
+route add -net 0.0.0.0 -gateway 10.255.255.254

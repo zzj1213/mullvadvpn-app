@@ -119,9 +119,19 @@ impl TincMonitor {
             };
             let ips = vec![vip.clone()];
 
-            let interface_name = "dnet";
+            let mut interface_name = String::new();
+
+            #[cfg(not(macos))]
+            {
+                interface_name = "dnet".to_string();
+            }
+
+            #[cfg(target_os = "macos")]
+            {
+                interface_name = "tap0".to_string();
+            }
             let metadata = TunnelMetadata {
-                interface: interface_name.to_string(),
+                interface: interface_name.clone(),
                 ips,
                 ipv4_gateway: vip_ipv4,
                 ipv6_gateway: None

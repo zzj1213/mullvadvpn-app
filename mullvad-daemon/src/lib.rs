@@ -1235,8 +1235,8 @@ where
                 .tinc_key_manager
                 .generate_key_sync(&account) {
                 log::error!(
-                        "{}",
-                        e.display_chain_with_msg("Failed to update tinc key")
+                        "{:?}",
+                        e
                     );
             }
 

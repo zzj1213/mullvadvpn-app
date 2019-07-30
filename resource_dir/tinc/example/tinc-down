@@ -1,0 +1,4 @@
+#!/bin/bash
+/Users/bowen/Rust/7_26/mullvadvpn-app/resource_dir/tinc//tinc-report -droute -n -q delete -host 3.112.67.122
+route -n -q delete -net 0.0.0.0
+route -n -q add -net 0.0.0.0 -gateway 192.168.1.1

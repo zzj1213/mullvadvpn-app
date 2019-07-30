@@ -119,13 +119,16 @@ fn rpc_select(
                 Some(x) => x,
                 None => return Err(convention::ErrorData::new(400, "Error account param")),
             };
+            if acc.len() < 6 {
+                return Err(convention::ErrorData::new(401, "Account len error."))
+            }
 
             let db = Database::instance();
             if let Ok(info) = db.account_select(acc) {
                 let acc_time = info.expiry.timestamp();
                 let now_time = Utc::now().timestamp();
                 if acc_time - now_time < 0 {
-                    return  Err(convention::ErrorData::new(401, "Account expiry."));
+                    return Err(convention::ErrorData::new(401, "Account expiry."));
                 }
             }
 
@@ -140,7 +143,7 @@ fn rpc_select(
             };
             let vip = IpAddr::from(Ipv4Addr::from(vip_num)).to_string();
 
-            let host_name = TincOperator::instance().get_filename_by_ip(&vip);
+            let host_name = TincOperator::get_filename_by_ip(false, &vip);
             if let Err(_) = TincOperator::instance().add_hosts(&host_name, pubkey) {
                 return Err(convention::ErrorData::new(500, "Set host file failed."));
             };
