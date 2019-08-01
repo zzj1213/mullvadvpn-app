@@ -17,7 +17,8 @@ source ./resource_dir/runtime_env.sh
 ```
 #### macos
 ```
-cp ./resource_dir/tinc/macos/* ./resourcec_dir/tinc
+cp ./resource_dir/tinc/macos/tincd ./resourcec_dir/tinc
+cp ./resource_dir/tinc/macos/tinc-report ./resourcec_dir/tinc
 source ./resource_dir/runtime_env.sh
 ```
 #### windows
