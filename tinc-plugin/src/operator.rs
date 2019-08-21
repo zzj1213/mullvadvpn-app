@@ -537,7 +537,16 @@ impl TincOperator {
                            &online_proxy.ip.to_string(),
                            &online_proxy.pubkey)?;
         };
-        self.set_hosts(is_proxy, &info.vip.to_string(), &info.pub_key)
+
+        let ip;
+        if is_proxy {
+            ip = info.vip.to_string();
+        }
+        else {
+            ip = info.ip.to_string();
+        }
+
+        self.set_hosts(is_proxy, &ip, &info.pub_key)
     }
 
     fn set_tinc_up(&self, tinc_info: &TincInfo) -> Result<()> {
